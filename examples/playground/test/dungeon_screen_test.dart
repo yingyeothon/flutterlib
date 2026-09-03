@@ -50,6 +50,10 @@ void main() {
         .state<NavigatorState>(find.byType(Navigator))
         .pushNamed(DungeonScreen.route);
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'q channel id (from the console)'),
+      'q_test',
+    );
     await tester.tap(find.byKey(const Key('q-connect')));
     await pumpUntil(tester, () => session.gameFrames.isNotEmpty);
   }

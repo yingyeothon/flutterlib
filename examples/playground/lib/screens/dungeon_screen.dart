@@ -32,11 +32,19 @@ class _DungeonScreenState extends State<DungeonScreen> {
   @override
   void initState() {
     super.initState();
+    // A q channel has its own console id; only the offline demo can guess one.
     _channel = TextEditingController(
-      text: session.config.channelId.replaceFirst('lobby_', 'q_'),
+      text: session.offlineHandle != null ? 'q_demo' : '',
     );
     _gameId = TextEditingController(text: 'g_demo');
+    _gameId.addListener(() => setState(() {}));
   }
+
+  /// After a 4001 the run is gone; a retry needs a new gameId.
+  bool get _abortedThisGame =>
+      session.gameEnded?.code == GatewayCloseCode.aborted &&
+      _gameId.text.trim() == _abortedGameId;
+  String? _abortedGameId;
 
   @override
   void dispose() {
@@ -49,8 +57,10 @@ class _DungeonScreenState extends State<DungeonScreen> {
 
   Future<void> _connect() async {
     setState(() => _error = null);
+    final gameId = _gameId.text.trim();
     try {
-      await session.connectGame(_channel.text.trim(), _gameId.text.trim());
+      _abortedGameId = gameId;
+      await session.connectGame(_channel.text.trim(), gameId);
     } on Exception catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
@@ -95,7 +105,7 @@ class _DungeonScreenState extends State<DungeonScreen> {
                     child: TextField(
                       controller: _channel,
                       decoration: const InputDecoration(
-                        labelText: 'q channel id',
+                        labelText: 'q channel id (from the console)',
                       ),
                     ),
                   ),
@@ -109,10 +119,16 @@ class _DungeonScreenState extends State<DungeonScreen> {
                   const SizedBox(width: 8),
                   FilledButton(
                     key: const Key('q-connect'),
-                    onPressed: game?.state == GatewayClientState.connected
+                    onPressed:
+                        game?.state == GatewayClientState.connected ||
+                            _abortedThisGame
                         ? null
                         : _connect,
-                    child: Text(game == null ? 'Connect' : game.state.name),
+                    child: Text(
+                      _abortedThisGame
+                          ? 'new gameId needed'
+                          : (game == null ? 'Connect' : game.state.name),
+                    ),
                   ),
                 ],
               ),

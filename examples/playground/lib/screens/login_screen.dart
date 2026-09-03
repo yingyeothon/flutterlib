@@ -25,6 +25,9 @@ class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _authChannel;
   final TextEditingController _jwt = TextEditingController();
   final TextEditingController _returned = TextEditingController();
+  final TextEditingController _redirect = TextEditingController(
+    text: 'http://localhost/signin',
+  );
   String? _nonce;
   String? _error;
   bool _busy = false;
@@ -56,6 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _authChannel,
       _jwt,
       _returned,
+      _redirect,
     ]) {
       c.dispose();
     }
@@ -77,10 +81,10 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await action();
     } on AuthFailure catch (e) {
-      setState(() => _error = 'sign-in failed: $e');
+      if (mounted) setState(() => _error = 'sign-in failed: $e');
     } on Exception catch (e) {
       // Never the token: these are SDK-authored messages.
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -107,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final nonce = AuthClient.newNonce();
     final url = session.authClient().buildStartUrl(
       provider: provider,
-      redirect: Uri.parse('http://localhost/signin'),
+      redirect: Uri.parse(_redirect.text.trim()),
       nonce: nonce,
     );
     setState(() => _nonce = nonce);
@@ -119,12 +123,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _finishBrowser() => _run(() async {
     final nonce = _nonce;
     if (nonce == null) throw StateError('start a sign-in first');
-    final returned = Uri.parse(_returned.text.trim());
+    // tryParse: a FormatException would quote the URL, fragment included.
+    final returned = Uri.tryParse(_returned.text.trim());
+    _returned.clear(); // the fragment is a credential
+    if (returned == null) throw StateError('that is not a URL');
     final token = session.authClient().parseRedirect(
       returned,
       expectedNonce: nonce,
     );
-    _returned.clear(); // the fragment is a credential
     session.signIn(token);
   });
 
@@ -134,14 +140,17 @@ class _LoginScreenState extends State<LoginScreen> {
     _channel.text = session.config.channelId;
   });
 
-  Future<void> _enterLobby() => _run(() async {
-    session.updateConfig(_readConfig());
-    if (!session.config.canConnect) {
-      throw StateError('gateway URL and channel id are required');
-    }
-    if (!mounted) return;
+  Future<void> _enterLobby() async {
+    await _run(() async {
+      session.updateConfig(_readConfig());
+      if (!session.config.canConnect) {
+        throw StateError('gateway URL and channel id are required');
+      }
+    });
+    if (_error != null || !mounted) return;
+    // Outside _run: the lobby visit must not hold this screen busy.
     await Navigator.of(context).pushNamed(LobbyScreen.route);
-  });
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -175,6 +184,12 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 16),
           Text('Sign in', style: Theme.of(context).textTheme.titleMedium),
+          TextField(
+            controller: _redirect,
+            decoration: const InputDecoration(
+              labelText: 'Redirect URL (must be on the auth channel allowlist)',
+            ),
+          ),
           Wrap(
             spacing: 8,
             children: <Widget>[

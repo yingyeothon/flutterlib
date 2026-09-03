@@ -220,18 +220,20 @@ class _ZoneTab extends StatelessWidget {
               ),
               Text('${peers.length} peer(s) in view'),
               if (hello != null)
-                DropdownButton<String>(
-                  key: const Key('zone-select'),
-                  value: zone.isEmpty ? hello.zone : zone,
-                  items: <String>{hello.zone, 'Zone001', 'Zone002'}
-                      .map(
-                        (z) =>
-                            DropdownMenuItem<String>(value: z, child: Text(z)),
-                      )
-                      .toList(),
-                  onChanged: (z) {
-                    if (z != null) onZone(z);
-                  },
+                SizedBox(
+                  width: 160,
+                  child: TextField(
+                    key: const Key('zone-field'),
+                    controller: TextEditingController(
+                      text: zone.isEmpty ? hello.zone : zone,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'zone (submit to move)',
+                    ),
+                    onSubmitted: (z) {
+                      if (z.trim().isNotEmpty) onZone(z.trim());
+                    },
+                  ),
                 ),
             ],
           ),

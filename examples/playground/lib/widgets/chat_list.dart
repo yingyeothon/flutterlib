@@ -37,7 +37,14 @@ class _ChatListState extends State<ChatList> {
     }
   }
 
+  void _requireTo() {
+    if (_scope == SayScope.user && _to.text.trim().isEmpty) {
+      throw StateError('a whisper needs a user id in "to"');
+    }
+  }
+
   void _say() => _guard(() {
+    _requireTo();
     session.lobby?.say(
       scope: _scope,
       text: _text.text,
@@ -47,6 +54,7 @@ class _ChatListState extends State<ChatList> {
   });
 
   void _event() => _guard(() {
+    _requireTo();
     session.lobby?.event(
       scope: _scope,
       name: 'wave',

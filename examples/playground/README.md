@@ -34,9 +34,11 @@ flutter run -d linux \
   --dart-define=YYT_AUTH_CHANNEL_ID=auth_0123456789abcdef
 ```
 
-Sign in with **GitHub** or **Google** (the app opens the browser and asks you to
-paste the URL it came back to, since a desktop build has no deep link), or paste a
-JWT you obtained elsewhere.
+Sign in with **GitHub** or **Google**: the app opens the browser with the redirect
+URL from the login screen (default `http://localhost/signin`, **which must be on the
+auth channel's allowlist**); a desktop build has no deep link, so the browser lands
+on a connection-refused page whose address bar holds the fragment — paste that URL
+back into the app. Or paste a JWT you obtained elsewhere.
 
 ## Debug hooks (`kDebugMode` only)
 

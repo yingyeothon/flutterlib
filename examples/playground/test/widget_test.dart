@@ -18,6 +18,9 @@ void main() {
           authChannelId: '',
         ),
       );
+      tester.view.physicalSize = const Size(1280, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(PlaygroundApp(session: session));
       expect(find.text('Console values'), findsOneWidget);
       expect(find.text('Not signed in'), findsOneWidget);
@@ -42,6 +45,9 @@ void main() {
         authChannelId: '',
       ),
     );
+    tester.view.physicalSize = const Size(1280, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(PlaygroundApp(session: session));
     await tester.enterText(
       find.widgetWithText(TextField, 'Or paste a channel JWT'),
