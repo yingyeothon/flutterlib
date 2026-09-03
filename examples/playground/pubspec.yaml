@@ -1,0 +1,45 @@
+name: yyt_playground
+description: The playground app for the yyt Dart client libraries - sign-in, lobby, dungeon, and an offline demo.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  url_launcher: ^6.3.0
+  yingyeothon_auth_client:
+    path: ../../packages/yingyeothon_auth_client
+  yingyeothon_codec:
+    path: ../../packages/yingyeothon_codec
+  yingyeothon_fake_gateway:
+    path: ../../packages/yingyeothon_fake_gateway
+  yingyeothon_gamebase_client:
+    path: ../../packages/yingyeothon_gamebase_client
+  yingyeothon_logger:
+    path: ../../packages/yingyeothon_logger
+
+# The packages depend on each other by version (resolved by the workspace, or by
+# a tag for a consumer); outside the workspace those resolve to pub.dev, where
+# they do not exist, so every sibling is overridden to its path here.
+dependency_overrides:
+  yingyeothon_auth_client:
+    path: ../../packages/yingyeothon_auth_client
+  yingyeothon_codec:
+    path: ../../packages/yingyeothon_codec
+  yingyeothon_fake_gateway:
+    path: ../../packages/yingyeothon_fake_gateway
+  yingyeothon_gamebase_client:
+    path: ../../packages/yingyeothon_gamebase_client
+  yingyeothon_logger:
+    path: ../../packages/yingyeothon_logger
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

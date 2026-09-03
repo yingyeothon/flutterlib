@@ -1,0 +1,17 @@
+# Injected by `flutter create .`; never committed (see README.md).
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+.metadata
+
+# Flutter/Dart tool output
+.dart_tool/
+build/
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
