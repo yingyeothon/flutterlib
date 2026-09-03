@@ -109,7 +109,10 @@ final class GameClientImpl implements GatewayGameClient {
   @override
   void send(JsonObject frame) {
     final type = frame.getString('type');
-    if (type != null && reservedGameFrameTypes.contains(type)) {
+    if (type == null) {
+      throw StateError('bad_message: a game frame needs a string type');
+    }
+    if (reservedGameFrameTypes.contains(type)) {
       throw StateError('reserved_type: $type is set by the gateway');
     }
     _socket.send(frame);
@@ -118,7 +121,8 @@ final class GameClientImpl implements GatewayGameClient {
   void _onFrame(Object? raw) {
     if (raw is Map<String, Object?> &&
         raw.getString('type') == FrameTypes.error &&
-        raw.getString('code') != null) {
+        raw.getString('code') != null &&
+        raw.getString('message') != null) {
       final frame = ErrorFrame(
         raw,
         code: raw.getString('code')!,

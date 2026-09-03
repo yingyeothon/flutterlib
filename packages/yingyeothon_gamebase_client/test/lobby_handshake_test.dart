@@ -5,6 +5,47 @@ import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 import 'support/harness.dart';
 
 void main() {
+  test('a stateChanges listener already sees hello and a fresh peer map', () {
+    fakeAsync((async) {
+      final h = LobbyHarness(async);
+      final seen = <String>[];
+      h.client.stateChanges.listen((s) {
+        if (s == GatewayClientState.connected) {
+          seen.add(
+            'hello=${h.client.hello?.userId} zone=${h.client.peers.zone}',
+          );
+        }
+      });
+      h.client.connected.listen((_) => seen.add('connected'));
+      h.connect();
+      h.openAndHello();
+      expect(seen, ['connected', 'hello=me zone=null']);
+    });
+  });
+
+  test('a binary frame after hello is a protocol error, not a close', () {
+    fakeAsync((async) {
+      final h = LobbyHarness(async)..connect();
+      h.openAndHello();
+      h.socket.serverSendBinary();
+      expect(h.trace.last, 'protocolError:non-text frame');
+      expect(h.client.state, GatewayClientState.connected);
+    });
+  });
+
+  test('close() from an opened handler leaves no hello timer pending', () {
+    fakeAsync((async) {
+      final h = LobbyHarness(async);
+      h.client.stateChanges.listen((_) {});
+      h.connect();
+      // The socket opened; the app decides to leave before hello.
+      h.socket.serverOpen();
+      h.client.close();
+      async.flushMicrotasks();
+      expect(async.pendingTimers, isEmpty);
+    });
+  });
+
   test('opens the channel URL with the bearer subprotocol list', () {
     fakeAsync((async) {
       final h = LobbyHarness(async)..connect();

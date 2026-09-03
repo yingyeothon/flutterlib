@@ -28,8 +28,10 @@ abstract final class GatewayCloseCode {
   /// The outbound queue filled with control frames; reconnect to resync.
   static const int tooSlow = 4005;
 
-  /// An SDK-initiated close (hello timeout, wrong subprotocol, oversized
-  /// frame). Never sent by the gateway.
+  /// An SDK-initiated close: a hello timeout, a wrong subprotocol, or an
+  /// inbound frame over the transport's cap. Never sent by the gateway. The
+  /// first two carry their own disposition; a bare `4900` is the transport
+  /// cutting an oversized frame, and reconnects.
   static const int local = 4900;
 }
 
@@ -99,6 +101,11 @@ CloseDisposition classifyClose(int code, GatewayChannelKind kind) {
       return const CloseDisposition(
         CloseDispositionKind.reconnect,
         'client too slow; resync',
+      );
+    case GatewayCloseCode.local:
+      return const CloseDisposition(
+        CloseDispositionKind.reconnect,
+        'the SDK closed the socket: inbound frame over the cap',
       );
     case 1000:
       return kind == GatewayChannelKind.q

@@ -4,10 +4,13 @@ import 'frame_types.dart';
 
 /// The channel's capability object, forwarded verbatim in `hello`.
 ///
-/// A `null` field means the gateway did not say, and the SDK treats that as
+/// A field the gateway did not send reads as `null` and is treated as
 /// allowed: the local checks are a courtesy that gives a fast error, and the
 /// gateway is the enforcement. Only an explicit `false` (or a `say` list
-/// that omits the scope) refuses locally.
+/// that omits the scope) refuses locally. `say` is the exception: the
+/// gateway marshals an empty Go slice as JSON `null`, and its `AllowsSay`
+/// refuses every scope for it, so a `say` that is present and `null` reads
+/// as an empty list.
 final class Capabilities {
   /// Creates a capability set.
   const Capabilities({this.pos, this.say, this.party, this.event, this.debug});
@@ -20,7 +23,7 @@ final class Capabilities {
       pos: json.getBool('pos'),
       say: sayRaw is List<Object?>
           ? sayRaw.whereType<String>().toList(growable: false)
-          : null,
+          : (json.has('say') ? const <String>[] : null),
       party: json.getBool('party'),
       event: json.getBool('event'),
       debug: json.getBool('debug'),
@@ -30,7 +33,8 @@ final class Capabilities {
   /// Whether `pos` frames are accepted.
   final bool? pos;
 
-  /// The `say` scopes accepted; `null` when unrestricted, `[]` when none.
+  /// The `say` scopes accepted; `null` when the gateway did not send the
+  /// field, `[]` when none (including a wire `null`).
   final List<String>? say;
 
   /// Whether `party.*` frames are accepted.

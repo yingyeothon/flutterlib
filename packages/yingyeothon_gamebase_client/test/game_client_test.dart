@@ -43,6 +43,9 @@ void main() {
       h.socket.serverSendRaw('"text"');
       h.socket.serverSendRaw('{"type":"error"}');
       h.socket.serverSendRaw('{"type":"error","code":"unavailable"}');
+      h.socket.serverSendRaw(
+        '{"type":"error","code":"unavailable","message":"queue"}',
+      );
       h.socket.serverSendRaw('{not json');
       expect(h.trace, [
         'connected',
@@ -51,6 +54,7 @@ void main() {
         'frame:7',
         'frame:"text"',
         'frame:{"type":"error"}',
+        'frame:{"type":"error","code":"unavailable"}',
         'refused:unavailable',
         'protocolError:frame is not JSON: malformed at 1',
       ]);
@@ -68,8 +72,12 @@ void main() {
         );
       }
       h.client.send(<String, Object?>{'type': 'move', 'dx': 1});
-      h.client.send(<String, Object?>{'noType': true});
-      expect(h.socket.sent, hasLength(2));
+      // The gateway refuses a frame without a string type as bad_message.
+      expect(
+        () => h.client.send(<String, Object?>{'noType': true}),
+        throwsStateError,
+      );
+      expect(h.socket.sent, hasLength(1));
     });
   });
 

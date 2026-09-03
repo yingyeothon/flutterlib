@@ -95,25 +95,30 @@ void main() {
     });
   });
 
-  test('say null is unrestricted, say [] refuses every scope', () {
+  test('a say list that is absent is unrestricted; null or [] refuses all', () {
     fakeAsync((async) {
       final h = LobbyHarness(async)..connect();
-      h.openAndHello(
-        hello: helloFrame(capabilities: <String, Object?>{'say': null}),
-      );
+      final caps = helloFrame(capabilities: <String, Object?>{'pos': true});
+      (caps['capabilities']! as Map<String, Object?>).remove('say');
+      h.openAndHello(hello: caps);
       h.client.say(scope: SayScope.zone, text: 't');
-      h.socket.serverClose(4002);
-      h.elapse(500);
-      h.openAndHello(
-        hello: helloFrame(capabilities: <String, Object?>{'say': <Object?>[]}),
-      );
-      for (final scope in SayScope.values) {
-        expect(() => h.client.say(scope: scope, text: 't'), throwsStateError);
+      // The gateway marshals an empty Go slice as null and refuses every
+      // scope for it; a present null therefore reads as an empty list.
+      for (final sayValue in <Object?>[null, <Object?>[]]) {
+        h.socket.serverClose(4002);
+        h.elapse(500);
+        h.openAndHello(
+          hello: helloFrame(capabilities: <String, Object?>{'say': sayValue}),
+        );
+        expect(h.client.capabilities!.say, isEmpty);
+        for (final scope in SayScope.values) {
+          expect(() => h.client.say(scope: scope, text: 't'), throwsStateError);
+        }
       }
     });
   });
 
-  test('event is gated by the event flag and the say scopes', () {
+  test('event is gated by the event flag only, never by the say scopes', () {
     fakeAsync((async) {
       final h = LobbyHarness(async)..connect();
       h.openAndHello(
@@ -124,11 +129,15 @@ void main() {
           },
         ),
       );
-      h.client.event(scope: SayScope.zone, name: 'n');
+      // The gateway delivers a party-scoped event on a channel whose say
+      // list is zone-only; refusing it locally was tslib's bug.
+      h.client.event(scope: SayScope.party, name: 'n');
+      h.client.event(scope: SayScope.user, name: 'n', to: 'u');
       expect(
-        () => h.client.event(scope: SayScope.party, name: 'n'),
+        () => h.client.say(scope: SayScope.party, text: 't'),
         throwsStateError,
       );
+      expect(h.socket.sent, hasLength(2));
     });
   });
 

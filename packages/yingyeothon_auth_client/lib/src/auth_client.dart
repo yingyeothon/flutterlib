@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:yingyeothon_codec/yingyeothon_codec.dart';
@@ -257,14 +258,24 @@ final class _AuthClient implements AuthClient {
     required String expectedNonce,
     String nonceParameter = 'nonce',
   }) {
-    final nonce = returned.queryParameters[nonceParameter];
+    final String? nonce;
+    final Map<String, String> params;
+    try {
+      // Both decoders throw ArgumentError on a bad percent-escape, and that
+      // message must not escape as anything but a kind.
+      nonce = returned.queryParameters[nonceParameter];
+      params = returned.hasFragment && returned.fragment.isNotEmpty
+          ? Uri.splitQueryString(returned.fragment)
+          : const <String, String>{};
+    } on ArgumentError {
+      throw const AuthFailure(AuthFailureKind.missingFragment);
+    }
     if (nonce == null || !_constantTimeEquals(nonce, expectedNonce)) {
       throw const AuthFailure(AuthFailureKind.nonceMismatch);
     }
-    if (!returned.hasFragment || returned.fragment.isEmpty) {
+    if (params.isEmpty) {
       throw const AuthFailure(AuthFailureKind.missingFragment);
     }
-    final params = Uri.splitQueryString(returned.fragment);
     final jwt = params['token'];
     if (jwt == null || jwt.isEmpty) {
       throw const AuthFailure(AuthFailureKind.missingFragment);
@@ -318,15 +329,37 @@ final class _AuthClient implements AuthClient {
     return _decode(await _send(request));
   }
 
+  /// Bodies larger than this are refused before they are buffered; an auth
+  /// answer is a few hundred bytes.
+  static const int maxResponseBytes = 1 << 20;
+
   Future<http.Response> _send(http.Request request) async {
     request.headers['accept'] = 'application/json';
     try {
       final streamed = await _http.send(request).timeout(timeout);
-      return await http.Response.fromStream(streamed).timeout(timeout);
+      final declared = streamed.contentLength;
+      if (declared != null && declared > maxResponseBytes) {
+        throw const AuthFailure(AuthFailureKind.notJson);
+      }
+      final chunks = BytesBuilder(copy: false);
+      await for (final chunk in streamed.stream.timeout(timeout)) {
+        chunks.add(chunk);
+        if (chunks.length > maxResponseBytes) {
+          throw const AuthFailure(AuthFailureKind.notJson);
+        }
+      }
+      return http.Response.bytes(
+        chunks.takeBytes(),
+        streamed.statusCode,
+        headers: streamed.headers,
+        request: request,
+      );
     } on TimeoutException {
       throw const AuthFailure(AuthFailureKind.network);
     } on http.ClientException {
       // The message names the URL.
+      throw const AuthFailure(AuthFailureKind.network);
+    } on ArgumentError {
       throw const AuthFailure(AuthFailureKind.network);
     }
   }

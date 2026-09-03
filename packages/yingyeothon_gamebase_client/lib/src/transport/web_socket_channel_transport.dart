@@ -22,7 +22,10 @@ const Duration defaultHandshakeTimeout = Duration(seconds: 15);
 /// - a failed or timed-out handshake is a [SocketClosed] with `1006`, and
 ///   the exception (whose message names the URL) is dropped;
 /// - a text frame over [maxInboundMessageBytes] closes the socket locally
-///   and is reported as `1009`;
+///   with `4900` and is reported as such (the state machine reconnects; a
+///   `1009` is reserved for what the *gateway* says about a frame you sent).
+///   The message is already assembled by the channel when the check runs, so
+///   this bounds what reaches the SDK, not the transport's own allocation;
 /// - a close the client asked for is reported with the code it asked for;
 /// - exactly one [SocketClosed] per socket.
 final class WebSocketChannelFactory implements GatewayWebSocketFactory {
@@ -144,7 +147,8 @@ final class _ChannelSocket implements GatewayWebSocket {
       // exceed the cap in UTF-8; only the rest is measured exactly.
       if (data.length > _maxBytes ~/ 3 &&
           utf8.encode(data).length > _maxBytes) {
-        _localCloseCode = 1009;
+        _localCloseCode = 4900;
+        _localCloseReason = 'frame too large';
         _channel?.sink.close(4900, 'frame too large');
         return;
       }

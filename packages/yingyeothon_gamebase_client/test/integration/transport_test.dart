@@ -206,7 +206,7 @@ void main() {
     socket.close(1000, '');
   });
 
-  test('64 KiB passes and 64 KiB + 1 closes with 1009', () async {
+  test('64 KiB passes and 64 KiB + 1 closes with 4900', () async {
     server.accept();
     final first = server.sockets.first;
     final okSocket = factory.connect(request(server.url));
@@ -224,7 +224,7 @@ void main() {
     ws2.add('한' * (maxInboundMessageBytes ~/ 3 + 1)); // 3 bytes each: over
     final events = await bigEvents;
     expect(events.whereType<SocketTextMessage>(), isEmpty);
-    expect((events.last as SocketClosed).code, 1009);
+    expect((events.last as SocketClosed).code, 4900);
     expect(await serverClose.timeout(const Duration(seconds: 5)), 4900);
   });
 

@@ -5,7 +5,7 @@ import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 import 'support/harness.dart';
 
 void main() {
-  for (final code in <int>[4002, 4005, 1001, 1006, 1011, 1234]) {
+  for (final code in <int>[4002, 4005, 1001, 1006, 1011, 4900, 1234]) {
     test('close $code reconnects with backoff and an empty peer map', () {
       fakeAsync((async) {
         final h = LobbyHarness(async)..connect();

@@ -53,7 +53,7 @@ final class HttpMapFetcher implements MapHttpFetcher {
 
   final http.Client _client;
 
-  /// Whole-request timeout.
+  /// Deadline for the whole request, headers and body together.
   final Duration timeout;
 
   /// The response is abandoned once its body exceeds this many bytes.
@@ -67,31 +67,59 @@ final class HttpMapFetcher implements MapHttpFetcher {
     final request = http.Request('GET', url)
       ..followRedirects = true
       ..maxRedirects = maxRedirects;
+    // One deadline for headers and body: a per-chunk timeout would let a
+    // drip-feeding host hold the fetch open indefinitely.
+    final deadline = Future<Never>.delayed(
+      timeout,
+      () => throw const MapFetchException(0, 'timeout'),
+    );
     final http.StreamedResponse response;
     try {
-      response = await _client.send(request).timeout(timeout);
-    } on TimeoutException {
-      throw const MapFetchException(0, 'timeout');
+      response = await Future.any(<Future<http.StreamedResponse>>[
+        _client.send(request),
+        deadline,
+      ]);
     } on http.ClientException {
       // The message names the URL; only the fact crosses.
       throw const MapFetchException(0, 'network');
+    } on ArgumentError {
+      // dart:io quotes the URI in its ArgumentError for a bad scheme or host.
+      throw const MapFetchException(0, 'badUrl');
     }
     final declared = response.contentLength;
     if (declared != null && declared > maxBytes) {
       throw MapFetchException(response.statusCode, 'tooLarge');
     }
     final chunks = BytesBuilder(copy: false);
-    try {
-      await for (final chunk in response.stream.timeout(timeout)) {
+    final done = Completer<void>();
+    late final StreamSubscription<List<int>> subscription;
+    subscription = response.stream.listen(
+      (chunk) {
         chunks.add(chunk);
-        if (chunks.length > maxBytes) {
-          throw MapFetchException(response.statusCode, 'tooLarge');
+        if (chunks.length > maxBytes && !done.isCompleted) {
+          done.completeError(
+            MapFetchException(response.statusCode, 'tooLarge'),
+          );
+          unawaited(subscription.cancel());
         }
-      }
-    } on TimeoutException {
-      throw MapFetchException(response.statusCode, 'timeout');
-    } on http.ClientException {
-      throw MapFetchException(response.statusCode, 'network');
+      },
+      onError: (Object _) {
+        if (!done.isCompleted) {
+          done.completeError(MapFetchException(response.statusCode, 'network'));
+        }
+      },
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+      cancelOnError: true,
+    );
+    try {
+      await Future.any(<Future<void>>[done.future, deadline]);
+    } on MapFetchException catch (e) {
+      unawaited(subscription.cancel());
+      throw e.reason == 'timeout'
+          ? MapFetchException(response.statusCode, 'timeout')
+          : e;
     }
     return HttpFetchResult(
       status: response.statusCode,

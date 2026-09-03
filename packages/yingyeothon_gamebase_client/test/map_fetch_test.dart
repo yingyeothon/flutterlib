@@ -108,6 +108,23 @@ void main() {
     });
   });
 
+  test('a mapUrl that is not an absolute http(s) URL is refused as badUrl', () {
+    fakeAsync((async) {
+      final fetcher = ScriptedFetcher();
+      final h = LobbyHarness(async, httpFetcher: fetcher)..connect();
+      h.openAndHello(hello: helloFrame(mapUrl: 'file:///etc/passwd'));
+      Object? error;
+      h.client.map().catchError((Object e) {
+        error = e;
+        return null;
+      });
+      async.flushMicrotasks();
+      expect((error! as MapFetchException).reason, 'badUrl');
+      expect(fetcher.calls, isEmpty, reason: 'never reached the fetcher');
+      expect(error.toString(), isNot(contains('passwd')));
+    });
+  });
+
   test('a body over the big cap is a failure, not text', () {
     fakeAsync((async) {
       final fetcher = ScriptedFetcher();

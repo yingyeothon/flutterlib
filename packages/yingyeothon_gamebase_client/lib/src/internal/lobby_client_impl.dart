@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
@@ -185,10 +186,8 @@ final class LobbyClientImpl implements GatewayLobbyClient {
   }) {
     _requireCapability('pos', capabilities?.pos);
     if (dir != null && isDirTooLong(dir)) {
-      throw ArgumentError.value(
-        dir,
-        'dir',
-        'must be at most $maxDirBytes bytes',
+      throw ArgumentError(
+        'dir must be at most $maxDirBytes bytes (got ${utf8.encode(dir).length})',
       );
     }
     send(LobbyFrameWriter.pos(zone, x, y, dir));
@@ -207,8 +206,9 @@ final class LobbyClientImpl implements GatewayLobbyClient {
     Object? payload,
     String? to,
   }) {
+    // The gateway gates `event` on the event flag only; the `say` scope list
+    // applies to `say`. Checking it here refused frames the gateway delivers.
     _requireCapability('event', capabilities?.event);
-    _requireScope(scope);
     send(LobbyFrameWriter.event(scope, name, payload, to));
   }
 
@@ -242,7 +242,7 @@ final class LobbyClientImpl implements GatewayLobbyClient {
       'channelId': _options.channelId,
       'userId': hello.userId,
       'tick': hello.tick,
-      'zone': hello.zone,
+      'zone': Normalize.diagnostic(hello.zone),
     });
     _connected.emit(hello);
   }
@@ -286,8 +286,20 @@ final class LobbyClientImpl implements GatewayLobbyClient {
   }
 
   void _applyPeerFrame(LobbyServerFrame frame) {
+    if (frame is EnterFrame && frame.peer.userId.isEmpty) {
+      _protocolErrors.emit(const ProtocolErrorEvent('enter without a userId'));
+      return;
+    }
     switch (_peers.apply(frame)) {
       case null:
+        if (frame is LeaveFrame || frame is PosBroadcastFrame) {
+          // A pos or leave for a peer not in view breaks the gateway's view
+          // invariant; the frame is ignored for rendering and noted.
+          _logger.debug('peer frame for an unknown peer', <String, Object?>{
+            'channelId': _options.channelId,
+            'type': frame.type,
+          });
+        }
         return;
       case PeerSnapshot():
         _snapshots.emit(frame as SnapshotFrame);

@@ -73,6 +73,44 @@ void main() {
     });
   });
 
+  test('an enter without a userId is a protocol error; an unknown-peer pos is logged', () {
+    fakeAsync((async) {
+      final h = LobbyHarness(async)..connect();
+      h.openAndHello();
+      h.socket.serverSend(<String, Object?>{
+        'type': 'snapshot',
+        'zone': 'Z',
+        'peers': <Object?>[],
+      });
+      h.socket.serverSend(<String, Object?>{
+        'type': 'enter',
+        'zone': 'Z',
+        'x': 1,
+        'y': 1,
+      });
+      h.socket.serverSend(<String, Object?>{
+        'type': 'pos',
+        'zone': 'Z',
+        'peers': <Object?>[peer('ghost', 1, 1)],
+      });
+      h.socket.serverSend(<String, Object?>{
+        'type': 'leave',
+        'zone': 'Z',
+        'userId': 'ghost',
+      });
+      expect(h.trace, [
+        'connected:me',
+        'snapshot:Z',
+        'protocolError:enter without a userId',
+      ]);
+      expect(h.client.peers.all(), isEmpty);
+      expect(
+        h.log.lines.where((l) => l.contains('peer frame for an unknown peer')),
+        hasLength(2),
+      );
+    });
+  });
+
   test('a snapshot replaces the map and keeps insertion order', () {
     final map = PeerMap(selfUserId: 'me');
     map.apply(

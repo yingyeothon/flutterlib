@@ -44,8 +44,9 @@ abstract interface class GatewayGameClient {
   /// Closes for good and releases every stream. Idempotent.
   Future<void> close();
 
-  /// Sends a game frame. Throws [StateError] unless connected, or when the
-  /// frame's `type` is `enter` or `leave` (the gateway's own bookkeeping).
+  /// Sends a game frame. Throws [StateError] unless connected, when the frame
+  /// has no string `type` (the gateway refuses it as `bad_message`), or when
+  /// the `type` is `enter` or `leave` (the gateway's own bookkeeping).
   void send(JsonObject frame);
 
   /// The socket is open and the gateway has pushed `enter` to the actor.

@@ -234,13 +234,16 @@ final class GatewaySocket {
     _helloTimer = null;
   }
 
-  void _markReady() {
+  /// Marks the connection usable. [deliver] runs the `hello`/`opened` emit
+  /// **before** the state change is announced and the pending `connect()`
+  /// is settled, so a `stateChanges` listener and an `await connect()` both
+  /// observe a client that already holds `hello`.
+  void _markReady(void Function() deliver) {
     _ready = true;
-    _setState(GatewayClientState.connected);
+    _state = GatewayClientState.connected;
     _backoff.reset();
-    // The completer's continuations run as microtasks, after the emit that
-    // follows in the caller, so `await connect()` observes a client that has
-    // already delivered `hello`.
+    deliver();
+    _stateChanges.emit(GatewayClientState.connected);
     _settle();
   }
 
@@ -388,11 +391,11 @@ final class GatewaySocket {
     }
     if (_options.kind == GatewayChannelKind.q) {
       // Ready before `opened`, so a handler can send the first frame.
-      _markReady();
-      _opened.emit(null);
+      _markReady(() => _opened.emit(null));
       return;
     }
-    _opened.emit(null);
+    // The timer exists before any handler runs, so a close() from an
+    // `opened` handler cancels it rather than leaving it pending.
     _helloTimer = Timer(Duration(milliseconds: _options.helloTimeoutMs), () {
       _helloTimer = null;
       _localClose(
@@ -400,6 +403,7 @@ final class GatewaySocket {
         'hello timeout',
       );
     });
+    _opened.emit(null);
   }
 
   void _onText(String text) {
@@ -434,8 +438,8 @@ final class GatewaySocket {
         return;
       }
       _clearHelloTimer();
-      _markReady();
-      _hello.emit(Hello.fromJson(parsed));
+      final hello = Hello.fromJson(parsed);
+      _markReady(() => _hello.emit(hello));
       return;
     }
     _frame.emit(parsed);

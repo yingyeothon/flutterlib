@@ -33,6 +33,7 @@ dev_dependencies:
 
 ```dart
 import 'package:yingyeothon_fake_gateway/yingyeothon_fake_gateway.dart';
+import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 
 final gw = await FakeGateway.start();
 final client = GatewayLobbyClient(GatewayLobbyClientOptions(

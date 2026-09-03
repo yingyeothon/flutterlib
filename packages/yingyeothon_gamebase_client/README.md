@@ -37,7 +37,8 @@ dependencies:
       path: packages/yingyeothon_gamebase_client
 ```
 
-`yingyeothon_codec` and `yingyeothon_logger` come with it. Works on Android, iOS,
+`yingyeothon_codec` and `yingyeothon_logger` are path dependencies inside the same
+checkout and come with it. Works on Android, iOS,
 desktop and web through `package:web_socket_channel`.
 
 ## Usage
@@ -92,7 +93,8 @@ The guide covers each feature: [Lobby](../../docs/lobby.md),
 | `4005` | too slow; the outbound queue filled | reconnects (a fresh `snapshot` resyncs) |
 | `1000` | `q`: the game dropped you, a normal finish | `finished`; lobby: stops |
 | `1001` | gateway restarting | reconnects with backoff |
-| `1003`, `1009` | binary frame / frame over 16 KB | stops (`clientBug`) |
+| `1003`, `1009` | you sent a binary frame / a frame over 16 KB | stops (`clientBug`) |
+| `4900` | the SDK cut an inbound text frame over 64 KiB; never sent by the gateway | reconnects |
 | `1011` | `q`: the enter push failed | reconnects |
 | anything else | network | reconnects |
 
@@ -146,4 +148,11 @@ still counts toward `4003`.
 - A transport connects in its constructor and buffers, rather than on the first
   listener, so a caller that awaits something else first cannot deadlock the
   handshake.
+- `event()` is gated by the `event` flag only. tslib also checked the `say` scope
+  list, which refuses a frame the gateway delivers; csharplib fixed that and this
+  port follows csharplib.
+- `stateChanges` announces `connected` **after** `hello` was applied and delivered,
+  so a state listener reads a populated client. Neither original has a state stream.
+- A `say` capability that is present and `null` reads as an empty list: the gateway
+  marshals an empty Go slice as `null` and refuses every scope for it.
 - No clock abstraction; tests use `package:fake_async`.

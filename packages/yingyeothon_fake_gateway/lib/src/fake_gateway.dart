@@ -435,7 +435,6 @@ final class _FakeGateway implements FakeGateway {
         if (identical(_lobby[userId], connection)) {
           _lobby.remove(userId);
           _leaveView(userId, connection);
-          _markOffline(userId);
         }
       },
       onError: (Object _) {},
@@ -456,7 +455,6 @@ final class _FakeGateway implements FakeGateway {
           .build(),
     );
     if (partyId != null) {
-      _markOnline(userId);
       _broadcastRoster(_parties[partyId]!);
     }
     // A retained position resumes the zone.
@@ -520,13 +518,21 @@ final class _FakeGateway implements FakeGateway {
     final zone = frame.getString('zone');
     final x = frame.getDouble('x');
     final y = frame.getDouble('y');
-    if (zone == null || zone.isEmpty || x == null || y == null) {
-      _send(c, _error('bad_zone', 'zone, x and y are required'));
+    if (x == null || y == null || !x.isFinite || !y.isFinite) {
+      _send(c, _error('bad_message', 'x and y must be numbers'));
+      return;
+    }
+    if (zone == null || zone.isEmpty) {
+      _send(c, _error('bad_zone', 'zone is required'));
       return;
     }
     final dirRaw = frame['dir'];
-    if (dirRaw != null && dirRaw is! String) {
-      _send(c, _error('bad_message', 'dir must be a string'));
+    if (dirRaw != null &&
+        (dirRaw is! String || utf8.encode(dirRaw).length > 16)) {
+      _send(
+        c,
+        _error('bad_message', 'dir must be a string of at most 16 bytes'),
+      );
       return;
     }
     final peer = _peers[c.userId]!;
@@ -615,33 +621,34 @@ final class _FakeGateway implements FakeGateway {
       return;
     }
     final scope = frame.getString('scope');
-    final allowed = _options.capabilities['say'];
     if (scope == null ||
-        !const <String>['zone', 'party', 'user'].contains(scope) ||
-        (allowed is List<Object?> && !allowed.contains(scope))) {
-      _send(
-        c,
-        _error(
-          scope == null ||
-                  !const <String>['zone', 'party', 'user'].contains(scope)
-              ? 'bad_scope'
-              : 'capability_off',
-          'scope',
-        ),
-      );
+        !const <String>['zone', 'party', 'user'].contains(scope)) {
+      _send(c, _error('bad_scope', 'unknown scope'));
+      return;
+    }
+    // Like the gateway: the say-scope list gates `say` only; `event` is
+    // gated by the event flag alone.
+    final allowed = _options.capabilities['say'];
+    final sayAllowed = allowed is List<Object?> && allowed.contains(scope);
+    if (!isEvent && !sayAllowed) {
+      _send(c, _error('capability_off', 'scope is off'));
       return;
     }
     final text = frame.getString('text') ?? '';
     final name = frame.getString('name') ?? '';
-    if (utf8.encode(text).length > 1024 || utf8.encode(name).length > 64) {
-      _send(c, _error('too_long', 'text or name too long'));
+    if (!isEvent && (text.isEmpty || utf8.encode(text).length > 1024)) {
+      _send(c, _error('too_long', 'text must be 1..1024 bytes'));
+      return;
+    }
+    if (isEvent && (name.isEmpty || utf8.encode(name).length > 64)) {
+      _send(c, _error('bad_message', 'name must be 1..64 bytes'));
       return;
     }
     final out = Json.object()
         .set('type', isEvent ? 'event' : 'say')
         .set('from', c.userId)
         .set('scope', scope)
-        .set('to', frame.getString('to'))
+        .set('to', scope == 'user' ? frame.getString('to') : null)
         .set(isEvent ? 'name' : 'text', isEvent ? name : text)
         .set('payload', isEvent ? frame['payload'] : null)
         .build();
@@ -792,10 +799,6 @@ final class _FakeGateway implements FakeGateway {
     }
     return _parties[id];
   }
-
-  final Set<String> _offline = <String>{};
-  void _markOffline(String userId) => _offline.add(userId);
-  void _markOnline(String userId) => _offline.remove(userId);
 
   /// Go `omitempty`: `leaderId`, `invited` and `max` are absent when empty.
   JsonObject _rosterFrame(_Party party) => Json.object()

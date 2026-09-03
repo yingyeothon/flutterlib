@@ -198,6 +198,8 @@ void main() {
     expect((await a.next())['code'], 'unknown_user');
     a.send({'type': 'say', 'scope': 'user', 'to': 'b', 'text': 'x' * 1025});
     expect((await a.next())['code'], 'too_long');
+    a.send({'type': 'say', 'scope': 'user', 'to': 'b', 'text': ''});
+    expect((await a.next())['code'], 'too_long', reason: 'empty text');
     a.send({'type': 'say', 'scope': 'user', 'to': 'b', 'text': 'psst'});
     expect(await b.next(), {
       'type': 'say',
@@ -214,6 +216,7 @@ void main() {
       'scope': 'zone',
       'name': 'cast',
       'payload': {'k': 1},
+      'to': 'ignored',
     });
     expect(await a.next(), {
       'type': 'event',
@@ -221,12 +224,20 @@ void main() {
       'scope': 'zone',
       'name': 'cast',
       'payload': {'k': 1},
-    });
+    }, reason: '`to` is stripped unless the scope is user');
+    a.send({'type': 'event', 'scope': 'zone', 'name': ''});
+    expect((await a.next())['code'], 'bad_message', reason: 'empty name');
+    a.send({'type': 'pos', 'zone': 'Z', 'x': 0, 'y': 0, 'dir': 'x' * 17});
+    expect(
+      (await a.next())['code'],
+      'bad_message',
+      reason: 'dir over 16 bytes',
+    );
     a.send({'type': 'ping'});
     expect(await a.next(), {'type': 'pong'});
     a.send({'type': 'nope'});
     expect((await a.next())['code'], 'bad_message');
-    expect(gw.received('a').length, 10);
+    expect(gw.received('a').length, 13);
     await a.close();
     await b.close();
   });
