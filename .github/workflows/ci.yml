@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The Dart half of tool/gate.sh: libraries, their tests, the coverage floor
+  # and the docs gate. Needs only the Dart SDK.
+  dart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.13"
+      - run: dart pub get
+      - run: dart format --output=none --set-exit-if-changed packages tool examples
+      - run: dart analyze --fatal-infos packages tool
+      - run: dart test --reporter compact
+      - name: Every package covers itself
+        run: dart run tool/bin/check_coverage.dart
+      - name: The docs link, index and cover the public surface
+        run: dart run tool/bin/check_docs.dart
+
+  # The Flutter half: the example compiles, its widget tests pass, and the
+  # platform folder injection the README teaches produces a Linux build.
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.47.x"
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - name: Analyze and test every example
+        run: |
+          for example in examples/*/; do
+            [ -f "$example/pubspec.yaml" ] || continue
+            ( cd "$example" && flutter pub get && flutter analyze --fatal-infos && flutter test )
+          done
+      - name: Inject platform folders and build for Linux
+        run: |
+          cd examples/playground
+          flutter create . --platforms=linux --project-name yyt_playground --org life.yyt
+          test -z "$(git status --porcelain .)" || { echo "flutter create changed tracked files:"; git status --porcelain .; exit 1; }
+          flutter build linux --debug
+
+  # This repository is public. The local hooks catch a leak before it is
+  # committed, but only on a machine that installed them, so the same scan runs
+  # here over the whole history — a leak an older commit carries is still being
+  # published.
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (full history, repo config)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks detect --redact --no-banner --config .gitleaks.toml --source .
+
+  # .gitignore does not survive `git add -f`, and a fresh clone is the one place
+  # that can prove nothing slipped through on a machine whose hooks were never
+  # installed. The forbidden-terms scan is the pre-push tree scan, repeated.
+  tracked-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No build output, platform folder or credential-shaped path is tracked
+        run: |
+          bad=$(git ls-files | grep -a -E \
+            '(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|^local/' \
+            | grep -a -vE '\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "tracked paths that must not exist:"; echo "$bad"; exit 1; fi
+          echo "tracked paths are clean"
+      - name: Nothing this repository keeps private is named in the tree
+        run: |
+          hits=$(git grep -a -c -E -f tool/forbidden-terms.txt HEAD -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks' \
+            | awk -F: '{ n += $NF } END { print n + 0 }')
+          if [ "${hits:-0}" -gt 0 ]; then echo "$hits line(s) name something private (tool/forbidden-terms.txt)"; exit 1; fi
+          echo "tree is clean"
