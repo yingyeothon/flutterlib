@@ -32,7 +32,10 @@
 - `examples/playground` is **not** a member: `flutter: sdk: flutter` would make every
   root command need the Flutter SDK, and `dart test` would try to run `flutter_test`
   tests. It depends on the packages by `path:` and resolves on its own; `check_docs`
-  refuses an example with `resolution: workspace`.
+  refuses an example with `resolution: workspace`. Because the packages depend on
+  each other by version, the example also needs a `dependency_overrides:` block that
+  maps every sibling to its path — otherwise pub looks for `yingyeothon_codec` on
+  pub.dev and fails.
 - `dart pub get` needs every workspace member to exist; a new member needs its
   `pubspec.yaml` before the root resolves again.
 
@@ -48,7 +51,13 @@
   `<!-- check-docs: exhaustive -->` lifts the node cap for a routing map); it is not
   a parser, so render a new diagram once in a viewer.
 - `claude-guard.sh` reads the Bash command from stdin JSON with `jq` and exits 2 on a
-  forbidden pattern. Without `jq` it exits 2 too.
+  forbidden pattern. Without `jq` it exits 2 too. `.claude/settings.json` invokes it
+  through `cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"` because a hook
+  runs in the session's current directory: a bare `tool/claude-guard.sh` broke the
+  moment a command had `cd`'d into `examples/playground`, and a hook that cannot
+  start is reported as a hook error on every Bash call. The guard matches the
+  command *text*, so a test that spells a forbidden flag inside a string is refused
+  too — probe the guard with the fixtures in `tool/test/`, not with a literal.
 
 ## Gotchas already paid for
 
