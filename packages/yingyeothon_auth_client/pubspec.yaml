@@ -1,12 +1,15 @@
 name: yingyeothon_auth_client
 description: The client half of the yyt auth channel - config, browser sign-in URL with a nonce, redirect parsing, credential exchange and verify.
 version: 0.1.0
+# Installed by git dependency; nothing is on pub.dev (rules/release.md).
+publish_to: none
 repository: https://github.com/yingyeothon/flutterlib
 resolution: workspace
 environment:
   sdk: ^3.13.0
 dependencies:
   http: ^1.6.0
-  yingyeothon_codec: ^0.1.0
+  yingyeothon_codec:
+    path: ../yingyeothon_codec
 dev_dependencies:
   test: ^1.31.0

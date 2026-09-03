@@ -6,6 +6,7 @@ resolution: workspace
 environment:
   sdk: ^3.13.0
 dependencies:
-  yingyeothon_codec: ^0.1.0
+  yingyeothon_codec:
+    path: ../yingyeothon_codec
 dev_dependencies:
   test: ^1.31.0

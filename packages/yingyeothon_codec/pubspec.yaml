@@ -1,6 +1,8 @@
 name: yingyeothon_codec
 description: Bounded JSON decoding and encoding for the yyt client libraries - length and depth limits, a non-throwing core, and failures that never quote the input.
 version: 0.1.0
+# Installed by git dependency; nothing is on pub.dev (rules/release.md).
+publish_to: none
 repository: https://github.com/yingyeothon/flutterlib
 resolution: workspace
 environment:
