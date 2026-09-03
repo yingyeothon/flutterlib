@@ -22,9 +22,12 @@ regexTarget = "line"
 regexes = [
   '''(?i)(placeholder|example|changeme|xxx+|\$\{|<[a-z-]+>)''',
   # Dart named argument fed from an identifier, not a literal: `token: options.token,`
-  '''(?i)token[ \t]*:[ \t]*[a-z][A-Za-z0-9_]*(\?\.|\.|,|\))''',
-  # A type annotation or a member reference, not a value: `String token;`, `Token = token;`
-  '''[=:][ \t]*[A-Za-z_][A-Za-z0-9_.]*[ \t]*[;,)]''',
+  # or `token: jwt)`. At most one `.`/`?.` member hop, so a three-part JWT written
+  # unquoted (`eyJ….eyJ….sig`) does not qualify.
+  '''(?i)token[ \t]*:[ \t]*[a-z_][A-Za-z0-9_]{0,40}(\?\.[a-z_][A-Za-z0-9_]{0,40}|\.[a-z_][A-Za-z0-9_]{0,40})?[ \t]*(,|\)|$)''',
+  # A member reference, not a value: `Token = token;`, `key: this.key,`. One hop, no
+  # dotted chains, so a dotted secret is not admitted.
+  '''[=:][ \t]*[A-Za-z_][A-Za-z0-9_]{0,40}(\.[A-Za-z_][A-Za-z0-9_]{0,40})?[ \t]*[;,)]''',
 ]
 
 [allowlist]

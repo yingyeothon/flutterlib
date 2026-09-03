@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # The last gate before anything becomes world-readable. Unlike pre-commit this sees
-# whole commits, so it also catches what `--no-verify`, an amend or a rebase slipped
-# past: it inspects the pushed tip's tree and scans the history reachable from it.
+# whole commits, so it also catches what a hook bypass, an amend or a rebase slipped
+# past: it scans every path ever added and every line ever added in the history
+# reachable from the pushed tip, then runs gitleaks over that history.
 #
-#   SKIP_CI_GATE=1 git push   runs the secret checks but not the build/test gate.
+#   SKIP_CI_GATE=1 git push   runs the secret checks but not the build/test gate
+#                             (exactly "1"; any other value is ignored).
 #
 # Two traps this hook is written around, both learned the hard way in the sibling
 # `service` repo — do not "simplify" them back:
 #  * Never `grep -q`: it SIGPIPEs the upstream command and, under `pipefail`, the 141
 #    makes the test false, so the guard passes silently on the largest diffs.
 #  * Every grep runs with `-a`, or one NUL byte silences the rest of the scan.
+# And a third, paid for here: `git grep`/`grep` exit 1 when nothing matches, which
+# under `set -e` + `pipefail` aborts the hook on exactly the clean tree it should let
+# through. Every scan pipeline ends in `|| true` and counts, never tests, the result.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -18,7 +23,7 @@ command -v gitleaks >/dev/null || {
   exit 1
 }
 
-forbidden_paths='(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|^local/'
+forbidden_paths='(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|(^|/)local/'
 
 zero=0000000000000000000000000000000000000000
 pushed=0
@@ -27,27 +32,30 @@ while read -r _lref lsha _rref rsha; do
   [ "$lsha" = "$zero" ] && continue   # a branch deletion carries nothing
   pushed=1
 
-  tracked=$(git ls-tree -r --name-only "$lsha" | grep -a -E "$forbidden_paths" \
-    | grep -a -vE '\.env\.example$' || true)
+  # Every path ever added in the reachable history, not only the tip's tree: a
+  # keystore committed and deleted two commits later is still published.
+  tracked=$({ git log --diff-filter=A --name-only -z --format= "$lsha" || true; } | tr '\0' '\n' \
+    | grep -a -E "$forbidden_paths" | grep -a -vE '\.env\.example$' | sort -u || true)
   if [ -n "$tracked" ]; then
-    echo "pre-push: paths that must never be tracked are in $lsha:" >&2
+    echo "pre-push: paths that must never be tracked are in the history reachable from $lsha:" >&2
     printf '%s\n' "$tracked" >&2
     exit 1
   fi
 
-  # The whole tree at the tip, not only the diff: a term that got in earlier is still
-  # being published by this push.
-  hits=$(git grep -a -c -E -f tool/forbidden-terms.txt "$lsha" -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks' \
-    | awk -F: '{ n += $NF } END { print n + 0 }')
+  # Every line ever added in the reachable history, for the private terms.
+  hits=$({ git log -p --format= "$lsha" -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks/pre-commit' ':!tool/git-hooks/pre-push' || true; } \
+    | grep -a -E '^\+' | grep -a -vE '^\+\+\+' \
+    | grep -a -i -c -E -f tool/forbidden-terms.txt || true)
   if [ "${hits:-0}" -gt 0 ]; then
-    echo "pre-push: $hits line(s) in $lsha name something this repository keeps private (tool/forbidden-terms.txt)." >&2
+    echo "pre-push: $hits line(s) in the history reachable from $lsha name something this repository keeps private (tool/forbidden-terms.txt)." >&2
+    echo "pre-push: that needs a history rewrite, not a new commit — rules/security.md." >&2
     exit 1
   fi
 
   # A private identifier anywhere in the reachable history is published by this push
   # too; a later commit removing it changes nothing.
   if [ -f local/identifiers.txt ]; then
-    hits=$(git log -p --format= "$lsha" -- . ':!tool/git-hooks' \
+    hits=$({ git log -p --format= "$lsha" -- . ':!tool/git-hooks/pre-commit' ':!tool/git-hooks/pre-push' || true; } \
       | grep -a -E '^\+' | grep -a -vE '^\+\+\+' \
       | grep -a -c -E -f local/identifiers.txt || true)
     if [ "${hits:-0}" -gt 0 ]; then
@@ -59,8 +67,8 @@ while read -r _lref lsha _rref rsha; do
 
   # Scan everything reachable from the pushed tip, not just the new range. A leak an
   # older commit already carries is still being published on this push, and a later
-  # commit never undoes it — that needs a history rewrite
-  # (`git filter-repo --replace-text`) and a force push.
+  # commit never undoes it — that needs a history rewrite and a force push
+  # (rules/security.md).
   #
   # After a rewrite the remote tip may no longer exist locally, so `$rsha..$lsha`
   # would be an invalid range; the full scan sidesteps that too. This history is small
@@ -70,7 +78,7 @@ done
 
 [ "$pushed" = "1" ] || exit 0
 
-if [ -n "${SKIP_CI_GATE:-}" ]; then
+if [ "${SKIP_CI_GATE:-}" = "1" ]; then
   echo "pre-push: SKIP_CI_GATE set, skipping the build gate"
   exit 0
 fi

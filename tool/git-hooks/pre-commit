@@ -16,7 +16,9 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-staged=$(git diff --cached --name-only --diff-filter=ACMR)
+# -z and tr: git C-quotes a path with a non-ASCII or control character, and the
+# leading quote would defeat every ^ anchor below.
+staged=$(git diff --cached --name-only -z --diff-filter=ACMR | tr '\0' '\n')
 
 # build|.dart_tool|coverage: tool output.
 # pubspec.lock: a library workspace resolves fresh, like its consumers do.
@@ -24,7 +26,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 # *.jks|*.keystore|*.p8|*.p12|*.mobileprovision|key.properties|google-services.json|
 # GoogleService-Info.plist|.env*|.envrc|local/: this repo needs no credentials, so one of
 # these is a mistake.
-forbidden_paths='(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|^local/'
+forbidden_paths='(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|(^|/)local/'
 bad=$(printf '%s\n' "$staged" | grep -a -E "$forbidden_paths" | grep -a -vE '\.env\.example$' || true)
 if [ -n "$bad" ]; then
   echo "pre-commit: refusing paths that must never be tracked:" >&2
@@ -32,11 +34,13 @@ if [ -n "$bad" ]; then
   exit 1
 fi
 
-# Added lines only, excluding the term list itself and the hooks that read it.
-added=$(git diff --cached -U0 --diff-filter=ACMR -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks' \
+# Added lines only, excluding the term list itself and the two hooks that read it
+# (by exact path: a whole-directory exclusion would be a place to hide a term).
+added=$(git diff --cached -U0 --diff-filter=ACMR -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks/pre-commit' ':!tool/git-hooks/pre-push' \
   | grep -a -E '^\+' | grep -a -vE '^\+\+\+' || true)
 
-hits=$(printf '%s\n' "$added" | grep -a -c -E -f tool/forbidden-terms.txt || true)
+# -i: the terms are header names and paths, which arrive in any casing.
+hits=$(printf '%s\n' "$added" | grep -a -i -c -E -f tool/forbidden-terms.txt || true)
 if [ "${hits:-0}" -gt 0 ]; then
   echo "pre-commit: $hits added line(s) name something this repository keeps private (tool/forbidden-terms.txt)." >&2
   echo "pre-commit: see rules/security.md — the recipe belongs in the service repo, not here." >&2

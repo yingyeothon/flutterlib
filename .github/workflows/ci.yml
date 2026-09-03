@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   # The Dart half of tool/gate.sh: libraries, their tests, the coverage floor
   # and the docs gate. Needs only the Dart SDK.
@@ -74,21 +77,21 @@ jobs:
 
   # .gitignore does not survive `git add -f`, and a fresh clone is the one place
   # that can prove nothing slipped through on a machine whose hooks were never
-  # installed. The forbidden-terms scan is the pre-push tree scan, repeated.
+  # installed. The same path regex as the hooks; -z because git C-quotes odd paths.
   tracked-paths:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: No build output, platform folder or credential-shaped path is tracked
         run: |
-          bad=$(git ls-files | grep -a -E \
-            '(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|^local/' \
+          bad=$(git ls-files -z | tr '\0' '\n' | grep -a -E \
+            '(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|(^|/)local/' \
             | grep -a -vE '\.env\.example$' || true)
           if [ -n "$bad" ]; then echo "tracked paths that must not exist:"; echo "$bad"; exit 1; fi
           echo "tracked paths are clean"
       - name: Nothing this repository keeps private is named in the tree
         run: |
-          hits=$(git grep -a -c -E -f tool/forbidden-terms.txt HEAD -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks' \
+          hits=$({ git grep -a -i -c -E -f tool/forbidden-terms.txt HEAD -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks/pre-commit' ':!tool/git-hooks/pre-push' || true; } \
             | awk -F: '{ n += $NF } END { print n + 0 }')
           if [ "${hits:-0}" -gt 0 ]; then echo "$hits line(s) name something private (tool/forbidden-terms.txt)"; exit 1; fi
           echo "tree is clean"

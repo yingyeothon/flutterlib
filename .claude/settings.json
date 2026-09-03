@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\" && exec tool/claude-guard.sh"
+            "command": "{ cd \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\" && bash tool/claude-guard.sh; } || exit 2"
           }
         ]
       }

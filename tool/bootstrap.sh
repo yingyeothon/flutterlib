@@ -8,7 +8,7 @@ tool/install-git-hooks.sh
 dart pub get
 
 for bin in gitleaks flutter jq; do
-  command -v "$bin" >/dev/null || echo "bootstrap: NOTE — '$bin' is not on PATH (gitleaks: every commit is refused without it; flutter: the example gate is skipped; jq: the Claude Code guard fails closed)." >&2
+  command -v "$bin" >/dev/null || echo "bootstrap: NOTE — '$bin' is not on PATH (gitleaks: every commit is refused without it; flutter: tool/gate.sh and every push are red until it is installed; jq: the Claude Code guard fails closed)." >&2
 done
 
 # The private ops setup generates a list of host/DB/account patterns in the sibling

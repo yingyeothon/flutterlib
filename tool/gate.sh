@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The green gate. pre-push and .github/workflows/ci.yml run exactly this, in this
-# order, so a failure here is the failure a push would hit.
+# The green gate. pre-push runs exactly this, in this order, so a failure here is the
+# failure a push would hit. CI (.github/workflows/ci.yml) runs the same steps plus a
+# `flutter create` clean-tree check and `flutter build linux --debug`.
 #
 #   SKIP_EXAMPLE_GATE=1 tool/gate.sh   skips the Flutter example on a machine without flutter.
 set -euo pipefail
