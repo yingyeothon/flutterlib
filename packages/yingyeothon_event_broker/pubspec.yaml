@@ -1,0 +1,9 @@
+name: yingyeothon_event_broker
+description: Type-keyed asynchronous event broker - subscribe by payload type, fire and await every handler in order.
+version: 0.1.0
+repository: https://github.com/yingyeothon/flutterlib
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dev_dependencies:
+  test: ^1.31.0
