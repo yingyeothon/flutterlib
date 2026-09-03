@@ -22,7 +22,12 @@ jobs:
       - run: dart pub get
       - run: dart format --output=none --set-exit-if-changed packages tool examples
       - run: dart analyze --fatal-infos packages tool
-      - run: dart test --reporter compact
+      - name: Every member's test suite
+        run: |
+          for member in packages/*/ tool/; do
+            [ -d "$member/test" ] || continue
+            ( cd "$member" && dart test --reporter=compact )
+          done
       - name: Every package covers itself
         run: dart run tool/bin/check_coverage.dart
       - name: The docs link, index and cover the public surface

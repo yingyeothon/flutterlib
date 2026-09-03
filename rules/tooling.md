@@ -10,7 +10,10 @@
    formatter is Dart 3.7+'s tall style; do not hand-format against it.
 4. `dart analyze --fatal-infos packages tool` — the example is analyzed by
    `flutter analyze` in step 8, because it resolves Flutter separately.
-5. `dart test --reporter compact` — every workspace member, integration tag included.
+5. `dart test --reporter=compact` **per member** (`packages/*/`, `tool/`), integration
+   tag included. `dart test` at the workspace root does not fan out: it looks for a
+   `test/` beside the root pubspec, finds none, prints its usage and exits non-zero —
+   which read as "passed" once when only the last line was checked.
 6. `dart run tool/bin/check_coverage.dart` — per package, own suite, `-x integration`.
 7. `dart run tool/bin/check_docs.dart`.
 8. `flutter pub get && flutter analyze --fatal-infos && flutter test` in every
@@ -28,7 +31,8 @@
 - One `.dart_tool/package_config.json` at the root; `dart test --coverage-path` uses it
   and therefore reports sibling sources too — `check_coverage` filters to the package's
   own `lib/` (`architecture.md`).
-- `dart test` at the root runs every member's `test/`, including `tool/test/`.
+- `dart test` at the root runs **nothing** (no root `test/`); run it inside each
+  member, which is what `tool/gate.sh` does.
 - `examples/playground` is **not** a member: `flutter: sdk: flutter` would make every
   root command need the Flutter SDK, and `dart test` would try to run `flutter_test`
   tests. It depends on the packages by `path:` and resolves on its own; `check_docs`

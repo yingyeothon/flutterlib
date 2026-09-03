@@ -96,7 +96,7 @@ tool/gate.sh
 ```
 
 It runs, in order: hook install, `dart pub get`, `dart format --set-exit-if-changed`,
-`dart analyze --fatal-infos packages tool`, `dart test` (whole workspace, integration
+`dart analyze --fatal-infos packages tool`, `dart test` in every member (integration
 tag included), `check_coverage`, `check_docs`, and `flutter pub get / analyze / test`
 for every example. `pre-push` and CI run exactly this, so this is a way to see the
 failure early rather than a step anyone can forget.

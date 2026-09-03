@@ -55,8 +55,8 @@
 
 - `@Tags(['integration'])` marks tests that open a loopback socket: the real
   `WebSocketChannelFactory` against a scripted `dart:io` server, and the SDK against
-  `yingyeothon_fake_gateway`. `dart test` at the root runs them; `check_coverage`
-  excludes them.
+  `yingyeothon_fake_gateway`. The per-member `dart test` in the gate runs them;
+  `check_coverage` excludes them.
 - A `dart:io` server socket answers a close frame only while its stream is read, and
   its `done` never completes after a client-initiated close. Read the stream to its end
   and take `closeCode` there (`ScriptedServer.closedCode`).

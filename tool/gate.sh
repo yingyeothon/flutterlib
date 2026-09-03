@@ -19,8 +19,13 @@ dart format --output=none --set-exit-if-changed packages tool examples
 step "dart analyze"
 dart analyze --fatal-infos packages tool
 
+# `dart test` at the workspace root finds no test/ of its own and stops; each
+# member runs its suite from its own directory.
 step "dart test"
-dart test --reporter compact
+for member in packages/*/ tool/; do
+  [ -d "$member/test" ] || continue
+  ( cd "$member" && dart test --reporter=compact )
+done
 
 step "coverage floor"
 dart run tool/bin/check_coverage.dart
