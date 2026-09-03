@@ -1,0 +1,45 @@
+# Dart / Flutter tool output
+.dart_tool/
+build/
+coverage/
+# A library workspace resolves fresh every time, like its consumers do.
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Example platform folders are injected by `flutter create .` and never committed
+# (examples/README.md): their contents change with every Flutter release and carry
+# app ids, signing hooks and bundle identifiers.
+examples/*/android/
+examples/*/ios/
+examples/*/linux/
+examples/*/macos/
+examples/*/windows/
+examples/*/web/
+examples/*/.metadata
+
+# Defense in depth for a PUBLIC repo (rules/security.md): this repository has no
+# infrastructure and needs no credentials, so any of these is a mistake.
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+key.properties
+google-services.json
+GoogleService-Info.plist
+.env
+.env.*
+!.env.example
+.envrc
+local/
+
+# Claude Code: session notes stay local; only the shared guard config is tracked.
+.claude/*
+!.claude/settings.json

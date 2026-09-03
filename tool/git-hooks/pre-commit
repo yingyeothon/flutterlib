@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Defense in depth for a PUBLIC repo (rules/security.md):
+#  1. refuse paths that must never be tracked, even when force-added past .gitignore;
+#  2. refuse added lines that name something this repo keeps private (tool/forbidden-terms.txt);
+#  3. if local/identifiers.txt exists, refuse added lines that name a private host, database
+#     or account (the list is generated in the private ops setup and never committed);
+#  4. gitleaks on the staged diff.
+#
+# Two traps this hook is written around, both learned the hard way in the sibling
+# `service` repo — do not "simplify" them back:
+#  * Never `grep -q`. It exits at the first match, which SIGPIPEs the upstream command,
+#    and under `set -o pipefail` that 141 makes the test false — so the guard passes
+#    silently on exactly the large diffs it exists to catch. Capture and count instead.
+#  * Every grep runs with `-a`. One NUL byte anywhere in the stream makes grep call the
+#    rest binary and stop matching, and half a history went unscanned that way.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# build|.dart_tool|coverage: tool output.
+# pubspec.lock: a library workspace resolves fresh, like its consumers do.
+# examples/*/{android,...}: injected by `flutter create .`, carry app ids and signing hooks.
+# *.jks|*.keystore|*.p8|*.p12|*.mobileprovision|key.properties|google-services.json|
+# GoogleService-Info.plist|.env*|.envrc|local/: this repo needs no credentials, so one of
+# these is a mistake.
+forbidden_paths='(^|/)(build|\.dart_tool|coverage)/|(^|/)pubspec\.lock$|^examples/[^/]+/(android|ios|linux|macos|windows|web)/|^examples/[^/]+/\.metadata$|\.(jks|keystore|p8|p12|mobileprovision)$|(^|/)key\.properties$|(^|/)google-services\.json$|(^|/)GoogleService-Info\.plist$|(^|/)\.env(\.|$)|(^|/)\.envrc$|^local/'
+bad=$(printf '%s\n' "$staged" | grep -a -E "$forbidden_paths" | grep -a -vE '\.env\.example$' || true)
+if [ -n "$bad" ]; then
+  echo "pre-commit: refusing paths that must never be tracked:" >&2
+  printf '%s\n' "$bad" >&2
+  exit 1
+fi
+
+# Added lines only, excluding the term list itself and the hooks that read it.
+added=$(git diff --cached -U0 --diff-filter=ACMR -- . ':!tool/forbidden-terms.txt' ':!tool/git-hooks' \
+  | grep -a -E '^\+' | grep -a -vE '^\+\+\+' || true)
+
+hits=$(printf '%s\n' "$added" | grep -a -c -E -f tool/forbidden-terms.txt || true)
+if [ "${hits:-0}" -gt 0 ]; then
+  echo "pre-commit: $hits added line(s) name something this repository keeps private (tool/forbidden-terms.txt)." >&2
+  echo "pre-commit: see rules/security.md — the recipe belongs in the service repo, not here." >&2
+  exit 1
+fi
+
+if [ -f local/identifiers.txt ]; then
+  hits=$(printf '%s\n' "$added" | grep -a -c -E -f local/identifiers.txt || true)
+  if [ "${hits:-0}" -gt 0 ]; then
+    echo "pre-commit: $hits added line(s) mention a private host, database or account name (local/identifiers.txt)." >&2
+    exit 1
+  fi
+fi
+
+command -v gitleaks >/dev/null || {
+  echo "pre-commit: gitleaks is required (apt install gitleaks / brew install gitleaks)" >&2
+  echo "pre-commit: install it, or run tool/install-git-hooks.sh again after installing" >&2
+  exit 1
+}
+gitleaks protect --staged --redact --no-banner --config .gitleaks.toml

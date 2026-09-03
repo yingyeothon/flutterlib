@@ -1,0 +1,25 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    # A missing doc comment on a public symbol is an error, not a nag: the
+    # package README's `## Public API` and the doc comment are the two places a
+    # consumer reads.
+    public_member_api_docs: error
+
+linter:
+  rules:
+    - public_member_api_docs
+    - prefer_single_quotes
+    - avoid_print
+    - always_declare_return_types
+    - unawaited_futures
+    - directives_ordering
+    - prefer_final_locals
+    - avoid_dynamic_calls
+    - cancel_subscriptions
+    - close_sinks

@@ -1,0 +1,5 @@
+# `integration` tests open real sockets on localhost; `dart test -x integration`
+# runs the pure suite alone (that is what the coverage gate measures).
+tags:
+  integration:
+    timeout: 2x

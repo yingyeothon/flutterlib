@@ -1,0 +1,19 @@
+# Workspace root. Not a package: `publish_to: none` and no `lib/`.
+# The Flutter example under examples/ is deliberately outside the workspace so
+# the library gate needs only the Dart SDK — see rules/tooling.md.
+name: yingyeothon_flutterlib
+publish_to: none
+environment:
+  sdk: ^3.13.0
+workspace:
+  - packages/yingyeothon_codec
+  - packages/yingyeothon_logger
+  - packages/yingyeothon_event_broker
+  - packages/yingyeothon_fake_gateway
+  - packages/yingyeothon_gamebase_client
+  - packages/yingyeothon_auth_client
+  - tool
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.31.0
+  coverage: ^1.15.0
