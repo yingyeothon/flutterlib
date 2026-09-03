@@ -6,7 +6,8 @@ build environment file. "Deploy" here means "make a change reachable by a consum
 and the decision flow is:
 
 1. **Decide what kind of change it is.**
-   - Docs, rules or tooling only → no version bump; push to `main` is the deployment.
+   - Docs, rules or tooling only → no version bump; the push to `main` is the
+     deployment, and it is done when CI is green (`gh run list --limit 3`).
    - A library change consumers should pick up → a version bump and a tag.
    - A breaking change (`0.x`: a removed or renamed export, a changed default) → a
      minor bump, and the package README's `## Differences` or a `docs/` note says what

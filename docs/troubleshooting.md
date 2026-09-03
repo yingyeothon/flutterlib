@@ -9,7 +9,7 @@ bad or expired — sign in again; a `ChannelToken` means the token is fine and t
 channel id or URL is wrong. [Authentication](authentication.md#checking-a-token-by-hand),
 [Console and options](console-and-options.md).
 
-## It reconnects five times, then stops
+## It retries four times, then stops on the fifth failed handshake
 
 Every attempt closed before it opened — a refused handshake. Same check as above;
 on `q`, also confirm you are in the game's start event (`403`).

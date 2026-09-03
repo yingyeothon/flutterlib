@@ -33,10 +33,10 @@
 
 ```bash
 tool/bootstrap.sh                       # once: pub get, git hooks, tool check
-tool/gate.sh                            # the green gate; pre-push and CI run exactly this
+tool/gate.sh                            # the green gate; pre-push runs exactly this, CI adds a Linux build
 dart run tool/bin/check_coverage.dart   # per-package floor, line 80 / branch 70
 dart run tool/bin/check_docs.dart       # links, index, diagrams, public API coverage
-cd examples/playground && flutter create . --platforms=linux && flutter run -d linux
+cd examples/playground && flutter create . --platforms=linux --project-name yyt_playground --org life.yyt && flutter run -d linux
 ```
 
 ## Non-Negotiables

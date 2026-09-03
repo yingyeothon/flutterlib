@@ -31,7 +31,7 @@ sequenceDiagram
   App->>Auth: open buildStartUrl(provider, redirect?nonce=…, nonce)
   Auth->>Provider: OAuth
   Provider-->>Auth: code
-  Auth-->>App: 302 redirect?nonce=…#token=…&userId=…&exp=…
+  Auth-->>App: 302 to redirect?nonce=… with fragment token, userId, exp
   App->>App: parseRedirect(uri, expectedNonce) → ChannelToken
   App->>App: discard the uri
 ```
@@ -63,8 +63,8 @@ the nonce query is admitted — or the request is refused with `403`.
 One request and no browser, for a client that already has the provider's token:
 
 ```dart
-final token = await auth.exchange(provider: 'github', accessToken: ghToken);
-final token = await auth.exchange(provider: 'google', idToken: googleIdToken);
+final github = await auth.exchange(provider: 'github', accessToken: ghToken);
+final google = await auth.exchange(provider: 'google', idToken: googleIdToken);
 ```
 
 **Google requires `idToken`** and GitHub `accessToken`; the wrong one is a `400`, and

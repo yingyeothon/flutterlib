@@ -52,6 +52,8 @@ thread. A listener that calls `setState` checks `mounted`; a `State` that holds 
 client cancels its subscriptions and closes the client:
 
 ```dart
+import 'dart:async';
+
 late final StreamSubscription<List<Peer>> _moved;
 
 @override

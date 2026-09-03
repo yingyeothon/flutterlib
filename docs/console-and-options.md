@@ -6,8 +6,8 @@
 | --- | --- | --- |
 | lobby channel → `wsUrl` | `GatewayClientOptions.url` | **origin only** (`wss://gw.yyt.life`); the SDK adds `?channel=…` |
 | lobby channel → id | `GatewayClientOptions.channelId` | `lobby_…` for the lobby client, `q_…` for the dungeon client |
-| auth channel → base URL | `AuthClient.baseUrl` | `https://auth.yyt.life` |
-| auth channel → id | `AuthClient.channelId` | `auth_…` |
+| auth channel → base URL | `AuthClient(baseUrl:)` | `https://auth.yyt.life` |
+| auth channel → id | `AuthClient(channelId:)` | `auth_…` |
 
 A `q` run also needs a `gameId`, which your game's own HTTP API hands out when it
 starts a dungeon ([Dungeon](dungeon.md)).

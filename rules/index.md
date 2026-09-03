@@ -20,6 +20,7 @@ Open the file whose trigger matches the task. Each file is short; read it whole.
 - After each completed task, fold durable lessons into the matching file above and add
   a row here when a file is added or removed.
 - A lesson is durable when a future agent with no memory of this session would repeat
-  the mistake without it. Session notes go to the git-ignored `.claude/`, not here.
+  the mistake without it. Session notes go to `.claude/` (git-ignored except the
+  tracked `settings.json`), not here.
 - Rules point at canonical documents (`CONVENTIONS.md`, the gateway README); they do not
   copy them.

@@ -101,8 +101,9 @@ lobby.event(scope: SayScope.zone, name: 'cast', payload: {'spell': 'fire', 'at':
 lobby.eventReceived.listen((e) => handle(e.name, e.payload));
 ```
 
-Same routing as chat; `name` ≤ 64 bytes, `payload` ≤ 8 KB and unread by the gateway.
-A `null` payload is omitted from the frame.
+Same routing as chat; `name` 1–64 bytes, `payload` ≤ 8 KB and unread by the gateway.
+A `null` payload is omitted from the frame. `event` is gated by the channel's `event`
+flag alone — the `say` scope list does not apply to it.
 
 ## Parties
 
@@ -151,8 +152,8 @@ next call retries. A new map version is a new URL in a later `hello`. Bounds: 30
 
 ## Escape hatches
 
-- `lobby.send(frame)` sends any object; the SDK still refuses to send outside
-  `connected`.
+- `lobby.send(frame)` sends any frame object (a `Map<String, Object?>`); the SDK still
+  refuses to send outside `connected`.
 - `lobby.frames` delivers every frame after `hello`, before any SDK handling, as a
   `LobbyServerFrame` (a `party` frame already filled in; an unknown type as
   `UnknownServerFrame`). `frame.raw` is the map as received.

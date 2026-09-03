@@ -10,7 +10,8 @@
   package with `-x integration` and keeps only that package's `lib/` lines — line
   ≥ 80 %, branch ≥ 70 %. A sibling's suite walking through your code does not count.
 - Test files live in `packages/<name>/test/`, import only the public barrel, and share
-  doubles from `test/support/`. If a test needs something internal, that thing should
+  doubles from `packages/yingyeothon_gamebase_client/test/support/` (the other
+  packages keep theirs inline). If a test needs something internal, that thing should
   be public or the test is testing the wrong layer.
 
 ## Doubles
@@ -27,8 +28,9 @@
   `0.999999`.
 - HTTP: a scripted `MapHttpFetcher` or an `http.BaseClient` subclass with an answer
   queue. Never a real host.
-- Logging: `CapturingLogWriter` records `LogWriters.format` output, so a test asserts
-  whole lines.
+- Logging: `CapturingLogWriter` (`gamebase_client/test/support/harness.dart`; the
+  logger suite has its own copy) records `LogWriters.format` output, so a test
+  asserts whole lines.
 - `LobbyHarness` / `GameHarness` build a client over the fakes, record every event as a
   string in `trace`, and hold the `connect()` future so a failure is observed rather
   than unhandled. `connectError` needs `async.flushMicrotasks()` after the event that

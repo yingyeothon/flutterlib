@@ -76,7 +76,8 @@ runs with no credential.
 ## Install
 
 Until a release is tagged, depend on `main` by git; append `ref: <tag>` to pin one.
-Each package resolves its own siblings, so one dependency is enough:
+A package's siblings are relative path dependencies inside the same checkout, so one
+git dependency per package you use is enough:
 
 ```yaml
 dependencies:

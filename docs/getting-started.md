@@ -19,8 +19,9 @@ dependencies:
 ```
 
 Append `ref: v0.1.0` (or the tag you want) to each once a release exists; until then
-they track `main`. The packages are pure Dart, so `flutter pub get` needs nothing
-else on any platform.
+they track `main`. The siblings each one needs (`codec`, `logger`) are path
+dependencies inside the same checkout, so nothing else is declared. The packages are
+pure Dart, so this works on every platform.
 
 ## 2. Collect four values from the console
 
@@ -28,8 +29,8 @@ else on any platform.
 | --- | --- | --- |
 | gateway origin, e.g. `wss://gw.yyt.life` | the lobby channel page, `wsUrl` (drop the query) | `GatewayClientOptions.url` |
 | lobby channel id, `lobby_…` | the same page | `GatewayClientOptions.channelId` |
-| auth base URL, e.g. `https://auth.yyt.life` | the auth channel page | `AuthClient.baseUrl` |
-| auth channel id, `auth_…` | the same page | `AuthClient.channelId` |
+| auth base URL, e.g. `https://auth.yyt.life` | the auth channel page | `AuthClient(baseUrl:)` |
+| auth channel id, `auth_…` | the same page | `AuthClient(channelId:)` |
 
 [Console and options](console-and-options.md) lists every field. Pass them with
 `--dart-define=YYT_GATEWAY_URL=…` and friends, never as literals in the tree.

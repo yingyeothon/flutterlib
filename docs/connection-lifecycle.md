@@ -66,7 +66,8 @@ reason is never surfaced (it may quote what you sent) — only its length is log
 | `4005` | too slow; the outbound queue filled | reconnects; the next `snapshot` resyncs |
 | `1000` | `q`: the game dropped you, a normal finish; lobby: closed normally | `finished` / stops |
 | `1001` | gateway restarting | reconnects with backoff |
-| `1003`, `1009` | binary frame / frame over 16 KB | stops (`clientBug`) |
+| `1003`, `1009` | you sent a binary frame / a frame over 16 KB | stops (`clientBug`) |
+| `4900` | the SDK cut an inbound text frame over 64 KiB (never sent by the gateway) | reconnects |
 | `1011` | `q`: the enter push failed | reconnects |
 | `1006`, anything else | network | reconnects |
 
@@ -95,6 +96,6 @@ resume and let the policy run — `4002` reconnects. If you want a clean end ins
 ## Shutting down
 
 `close()` is idempotent and does four things: cancels any pending reconnect, sends
-`1000 client closed`, emits one final `disconnected(willReconnect: false)` if the
-socket was open, and closes every stream. Call it from `dispose()`. A `connect()`
+`1000 client closed`, emits one final `disconnected(willReconnect: false)` if a
+socket was open or opening, and closes every stream. Call it from `dispose()`. A `connect()`
 still pending fails with `GatewayStoppedException`.

@@ -23,9 +23,10 @@
 ## Workspace facts
 
 - One `pubspec.yaml` at the root lists the members; each member says
-  `resolution: workspace`. Sibling dependencies are version constraints (`^0.1.0`),
-  resolved to source by the workspace and to the tag by a consumer. Never `path:`
-  between packages.
+  `resolution: workspace`. Sibling dependencies are relative `path:` entries: the
+  workspace resolves them to source, and a git-dependency consumer resolves them
+  inside the fetched checkout. A version constraint (`^0.1.0`) makes that consumer
+  look on pub.dev and fail — verified with a scratch app against a local clone.
 - `pubspec.lock` is not committed anywhere: a library resolves fresh, like its
   consumers.
 - One `.dart_tool/package_config.json` at the root; `dart test --coverage-path` uses it
@@ -36,10 +37,8 @@
 - `examples/playground` is **not** a member: `flutter: sdk: flutter` would make every
   root command need the Flutter SDK, and `dart test` would try to run `flutter_test`
   tests. It depends on the packages by `path:` and resolves on its own; `check_docs`
-  refuses an example with `resolution: workspace`. Because the packages depend on
-  each other by version, the example also needs a `dependency_overrides:` block that
-  maps every sibling to its path — otherwise pub looks for `yingyeothon_codec` on
-  pub.dev and fails.
+  refuses an example with `resolution: workspace`. Path dependencies of path
+  dependencies resolve, so the example needs no `dependency_overrides`.
 - `dart pub get` needs every workspace member to exist; a new member needs its
   `pubspec.yaml` before the root resolves again.
 
@@ -60,8 +59,10 @@
   runs in the session's current directory: a bare `tool/claude-guard.sh` broke the
   moment a command had `cd`'d into `examples/playground`, and a hook that cannot
   start is reported as a hook error on every Bash call. The guard matches the
-  command *text*, so a test that spells a forbidden flag inside a string is refused
-  too — probe the guard with the fixtures in `tool/test/`, not with a literal.
+  command *text*, so a Bash command that spells a forbidden flag inside a string is
+  refused too. `tool/test/claude_guard_test.dart` pipes commands into the script and
+  pins which are refused; extend it when the pattern changes, and never probe the
+  guard from Bash with a literal.
 
 ## Gotchas already paid for
 
@@ -76,9 +77,8 @@
   client-initiated close; read the stream (`testing.md`).
 - `web_socket_channel`'s `sink.close()` before `ready` completes loses the close; the
   transport records the request and finishes it after the handshake.
-- The pre-commit hook scans added lines for `tool/forbidden-terms.txt`; a script that
-  needs to *name* a private path (bootstrap copying an identifier list) cannot spell
-  it literally. Build the path from parts or drop the term from the list — the first
-  commit here dropped one directory name for that reason.
+- The pre-commit hook scans added lines for `tool/forbidden-terms.txt` (four
+  regexes; read the file before naming anything under `service`). A tracked script
+  must never need to spell one; if it seems to, build the string from parts.
 - `flutter create .` regenerates `test/widget_test.dart` if absent; keep a real test
   under that name in the example.

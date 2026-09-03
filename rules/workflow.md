@@ -28,8 +28,12 @@
   uncommitted work in the tree. `.claude/settings.json` installs a Claude Code guard
   that refuses those commands; if it blocks something legitimate, fix the guard, do not
   route around it.
-- **`git checkout -- <file>` discards that file's unstaged edits**, silently. Make a
-  throwaway experiment in a copy of the repo under `/tmp`, not in place.
+- **`git checkout -- <file>` discards that file's unstaged edits**, silently, and the
+  guard refuses it. Make a throwaway experiment in a copy of the repo under `/tmp`,
+  not in place; revert an unwanted edit by reading `git diff -- <file>` and undoing
+  it with the editor tool.
+- `.claude/` is git-ignored **except** `.claude/settings.json`, which is tracked and
+  reviewed like any other guard.
 - Releases are git tags and are the **user's** call — `release.md`.
 - `.claude/handover.md` is a **session note, not a rule**: where it and `rules/`
   disagree, `rules/` wins. Check its premise against `git log` before executing it; if
@@ -80,7 +84,8 @@
    ordering* if it touches the state machine, reconnect, the emitter or settlement;
    otherwise *editing and structure*.
 4. Fold durable lessons into `rules/*.md`; update `rules/index.md` if files changed.
-   Then send **the rule diff only** to a fourth fresh reviewer with one question:
+   Then send **the rule diff, with read-only access to the tree it describes,** to a
+   fourth fresh reviewer with one question:
    *can an agent with no memory of this session follow this exactly, and what will it
    do when it cannot?*
 5. Apply the feedback from all four. A finding you disagree with is answered by
@@ -98,15 +103,18 @@ tool/gate.sh
 It runs, in order: hook install, `dart pub get`, `dart format --set-exit-if-changed`,
 `dart analyze --fatal-infos packages tool`, `dart test` in every member (integration
 tag included), `check_coverage`, `check_docs`, and `flutter pub get / analyze / test`
-for every example. `pre-push` and CI run exactly this, so this is a way to see the
-failure early rather than a step anyone can forget.
+for every example. `pre-push` runs exactly this. CI runs the same steps and two more
+the gate cannot afford locally: `flutter create . --platforms=linux …` in the
+example (which must change no tracked file) and `flutter build linux --debug`. A
+push is done when CI is green; check it (`gh run list --limit 3`).
 
 **A gate that was already red before your change is a separate task.** Confirm with
-`git stash && tool/gate.sh`. Do not fold the repair into your commit and do not push
-over it. `SKIP_CI_GATE=1 git push` turns the build gate off (the secret scans still
-run) and `SKIP_EXAMPLE_GATE=1` skips the Flutter half — **do not use either** for a red
-tree or a slow one; they exist for a machine without the SDK, and the Claude Code
-guard refuses them.
+`git stash -u && tool/gate.sh; git stash pop` (`-u` takes the untracked files too, or
+the "before" tree is not the tree before your change). Do not fold the repair into
+your commit and do not push over it. The two skip variables (`…_CI_GATE`,
+`…_EXAMPLE_GATE`) exist for a machine without the SDK; the Claude Code guard refuses
+them in any spelling. **Without Flutter on `PATH` the gate is red and cannot be
+skipped from a session: stop, leave the tree uncommitted, and tell the user.**
 
 ## Scope decisions already made
 

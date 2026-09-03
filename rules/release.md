@@ -16,18 +16,21 @@
 
   Nothing is published to pub.dev and no CI job holds a publish credential. If that
   ever changes it is a decision recorded here first.
-- Every package carries **one version** in its `pubspec.yaml`, and sibling constraints
-  (`yingyeothon_codec: ^0.1.0`) must admit it. `check_docs` fails when the packages
-  disagree. `fake_gateway` and `tool` carry the same version for the same reason even
-  though they are never installed.
+- Every package carries **one version** in its `pubspec.yaml`; siblings are `path:`
+  dependencies, so one `ref:` pins them all together. `check_docs` fails when the
+  packages under `packages/` disagree; `tool/pubspec.yaml` carries the same version by
+  hand and is not gated.
 - `0.x`: a breaking change bumps the minor, everything else the patch.
 
 ## Cutting one
 
 1. The green gate and the manual verification (`manual-verification.md`) on the commit
    to be tagged — the offline demo, and the dev gateway when possible.
-2. Bump `version:` in every `packages/*/pubspec.yaml` and `tool/pubspec.yaml`; update
-   the `ref:` in every `## Install` snippet and in `docs/getting-started.md`.
+2. Bump `version:` in every `packages/*/pubspec.yaml` and `tool/pubspec.yaml`. Add
+   `ref: vX.Y.Z` to every `## Install` snippet (none carries one before the first
+   release) and to the snippets in `README.md` and `docs/getting-started.md`, and
+   delete their "until a release is tagged" sentences; on a later release, update the
+   `ref:` values instead.
 3. Commit that as its own commit (`Release vX.Y.Z`). **The agent stops here**: it does
    not tag.
 4. The user runs:

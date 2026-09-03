@@ -19,8 +19,9 @@ process and connects the SDK to it over the real transport. Walk the change:
 
 - Lobby → Zone tab: move; a second identity (Debug drawer → *Seed peers*) appears and
   moves; a zone change empties and refills the map.
-- Chat tab: a zone message echoes back with your id; a whisper to a seeded peer is
-  refused with `unknown_user` in the log panel (seeded peers are not online).
+- Chat tab: a zone message echoes back with your id; a whisper to `seed-1` echoes
+  back too (seeds are real sockets on the fake); a whisper to `nobody` is refused
+  with `unknown_user` in the log panel.
 - Party tab: create, invite a seeded peer, watch the roster.
 - Debug drawer → *Force close 4002*: the banner shows reconnecting, then connected;
   *Force close 4000*: stopped, no retry. *Abort q* on the dungeon screen: the Aborted
@@ -36,13 +37,16 @@ package:
 | Hook | What it does |
 | --- | --- |
 | Offline demo | starts the fake gateway, fills the config with its URL and a plain token |
-| Seed peers | connects N extra raw sockets to the fake as `seed-1..N` and moves them |
-| Force close *code* | asks the fake to close your lobby socket with `4000`…`4005`, `1000`, `1001` |
-| Abort q | closes your `q` socket with `4001` |
+| Seed 3 peers | connects three raw sockets to the fake as `seed-1..3` and moves them every 400 ms |
+| Force close *code* | asks the fake to close your lobby socket with `4000`, `4002`, `4004`, `4005` or `1001` |
+| Abort (4001) / Finish (1000) | closes your `q` socket with that code (dungeon screen) |
 | Log panel | the SDK's logger at `debug`, rendered in the app |
+| `--dart-define=YYT_OFFLINE_AUTOSTART=true` | on launch: offline demo, enter the lobby, seed the peers — no input needed |
 
-Add a hook when a verification needs a state that is slow to reach by hand; keep it
-behind `kDebugMode`.
+Without a UI driver (an agent, a headless box), build with the autostart define,
+launch the binary, and read the log panel or stdout; that is how the ritual's "a
+Linux run" is satisfied from a terminal. Add a hook when a verification needs a
+state that is slow to reach by hand; keep it behind `kDebugMode`.
 
 ## Against the dev gateway
 
@@ -70,5 +74,6 @@ or iOS is where background-resume reconnect is proven.
 
 - Vary one thing at a time. A claim that a change restored a behaviour needs a
   negative control: the same steps on the previous commit.
-- Record each run in a "Last verified" line in the relevant `docs/` page or the PR
-  text: commit sha, target, what was walked.
+- Record each run in the commit message body, one line: `Verified: offline demo on
+  linux, walked <steps>` (or `Verified: dev gateway, …`). There are no PRs to carry
+  it and no docs page owns it.
