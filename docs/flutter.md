@@ -28,6 +28,16 @@ flowchart TD
 - **Android / iOS:** the redirect arrives as a deep link (`app_links` or the platform
   API). Register the URL on the channel's allowlist first.
 
+## Key-value store
+
+`yingyeothon_kvstore_client` is plain HTTPS through `package:http`, so it runs on
+every platform the auth client does, web included: the store's CORS policy already
+admits any origin, the conditional headers and the two response headers, and there is
+nothing to configure. Give it `token.jwt` from `AuthClient` and never persist that
+token under this package's name or any other; a new token is a new `KvStoreClient`,
+and `close()` it with the screen that owns it. The playground's **Key-value store**
+screen shows both cases against the offline demo.
+
 ## Background and resume
 
 iOS suspends sockets when the app pauses; Android may. Expect a `disconnected` on

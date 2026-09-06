@@ -1,6 +1,6 @@
 # Console and options
 
-## The four values
+## The console values
 
 | Console field | Option | Note |
 | --- | --- | --- |
@@ -8,6 +8,7 @@
 | lobby channel → id | `GatewayClientOptions.channelId` | `lobby_…` for the lobby client, `q_…` for the dungeon client |
 | auth channel → base URL | `AuthClient(baseUrl:)` | `https://auth.yyt.life` |
 | auth channel → id | `AuthClient(channelId:)` | `auth_…` |
+| key-value store base URL | `KvStoreClientOptions.baseUrl` | `https://doc.yyt.life`; needed only if you use the [Key-value store](kvstore.md) |
 
 A `q` run also needs a `gameId`, which your game's own HTTP API hands out when it
 starts a dungeon ([Dungeon](dungeon.md)).
@@ -37,6 +38,14 @@ starts a dungeon ([Dungeon](dungeon.md)).
 
 `AuthClient` takes `baseUrl`, `channelId`, an optional `httpClient` and a `timeout`
 (30 s).
+
+`KvStoreClientOptions` takes `baseUrl` and `token`, plus:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `client` | an `http.Client` the library owns and `close()` closes | how requests are sent; inject one to share a connection pool or to test |
+| `timeout` | 15 s | one deadline for the headers and the body |
+| `logger` | `nullLogger` | `kv request` lines: method, route kind, status, bytes |
 
 ## What the console setting becomes in `hello`
 

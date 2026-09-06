@@ -20,11 +20,19 @@ bool get offlineAutostart =>
     offlineDemoAvailable &&
     const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART', defaultValue: false);
 
+/// `--dart-define=YYT_OFFLINE_AUTOSTART_KV=true` (debug builds only): start
+/// the offline demo and open the key-value screen, which then saves one
+/// settings record, so the two cases are walked with no input tooling.
+bool get offlineAutostartKv =>
+    offlineDemoAvailable &&
+    const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_KV', defaultValue: false);
+
 /// The close codes the debug drawer offers.
 const List<int> forcedCloseCodes = <int>[4000, 4002, 4004, 4005, 1001];
 
-/// Starts the fake gateway, points the session at it and signs in as
-/// `you` (the fake takes the token text as the user id).
+/// Starts the fake gateway, points the session (gateway and key-value store)
+/// at it and signs in as `you` (the fake takes the token text as the user
+/// id).
 Future<void> startOfflineDemo(Session session) async {
   if (!offlineDemoAvailable) return;
   final demo = await OfflineDemo.start();
@@ -33,6 +41,7 @@ Future<void> startOfflineDemo(Session session) async {
     session.config.copyWith(
       gatewayUrl: demo.gatewayUrl,
       channelId: 'lobby_demo',
+      kvBaseUrl: demo.kvUrl,
     ),
   );
   session.signIn(

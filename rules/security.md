@@ -20,9 +20,11 @@
 - The platform design notes in the parent directory, and the `service` repo's private
   planning and local directories, are private. Nothing from them belongs here, however
   useful.
-- The one credential-shaped literal in the tree is the test fixture
-  `eyJ.secret-token.sig`: three dot-separated words that look like a JWT and are not
-  one. The "never logs the token" tests need a literal to search for. Keep it obviously
+- The credential-shaped literals in the tree are the test fixture
+  `eyJ.secret-token.sig` — three dot-separated words that look like a JWT and are not
+  one; the "never logs the token" tests need a literal to search for — and the fake
+  store's server-key fixture `yds.auth_0123456789abcdef.k`, the doc-apiKey shape the
+  `service` repo publishes, built on the shared channel-id fixture. Keep it obviously
   fake and keep the `.gitleaks.toml` allowlist entry pointed at that exact string, not
   at the files that hold it. A JWT-shaped fixture with a real base64 payload is built
   at runtime in the test, never written as a literal — gitleaks refused one.
@@ -103,6 +105,13 @@
   provider credential, a response body or a URL with a fragment; `AuthFailure` is a
   kind and a status. `ChannelToken.toString()` omits the JWT. `parseRedirect` compares
   the nonce in constant time and tells the caller to discard the URI.
+- `kvstore_client` sends the token as `Authorization: Bearer` from one requester and
+  nowhere else; a `KvStoreException` is a status, a server code, an optional server
+  reason word and, on a lost compare-and-set for a reader, the live version — never
+  a key, a value, a URL or a body; a log line is a method, a route kind and, once an
+  answer arrived, a status and a byte count. A key and a value are peer-chosen by
+  the time they reach a message, so a local refusal names the grammar, never the
+  input.
 
 ## Building what goes out
 

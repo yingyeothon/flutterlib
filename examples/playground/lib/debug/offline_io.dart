@@ -18,12 +18,40 @@ class OfflineDemo {
 
   static Future<OfflineDemo> start() async {
     final gateway = await FakeGateway.start(
-      options: const FakeGatewayOptions(tick: 100),
+      options: const FakeGatewayOptions(
+        tick: 100,
+        kvCollections: <FakeKvCollection>[
+          // The guide's two cases: a project-readable, team-written board
+          // and a per-player record.
+          FakeKvCollection(
+            name: 'announcements',
+            readScope: 'project',
+            writeScope: 'team',
+            entries: <String, Object?>{
+              '2026-09-01': <String, Object?>{
+                'title': 'Welcome to the playground',
+                'body': 'This board is read-only for players.',
+              },
+              '2026-09-06': <String, Object?>{
+                'title': 'Season 2 starts',
+                'body': 'Save your settings on the other card.',
+              },
+            },
+          ),
+          FakeKvCollection(
+            name: 'profile',
+            readScope: 'user',
+            writeScope: 'user',
+          ),
+        ],
+      ),
     );
     return OfflineDemo._(gateway);
   }
 
   String get gatewayUrl => gateway.wsUrl.toString();
+
+  String get kvUrl => gateway.kvUrl.toString();
 
   /// Connects [count] raw sockets as `seed-1..N`, drops them into [zone] and
   /// moves them every tick.

@@ -6,6 +6,7 @@ import '../config.dart';
 import '../debug/debug_hooks.dart';
 import '../session.dart';
 import '../widgets/log_panel.dart';
+import 'kv_screen.dart';
 import 'lobby_screen.dart';
 
 /// Config, sign-in, and the offline demo.
@@ -23,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _channel;
   late final TextEditingController _authBase;
   late final TextEditingController _authChannel;
+  late final TextEditingController _kvBase;
   final TextEditingController _jwt = TextEditingController();
   final TextEditingController _returned = TextEditingController();
   final TextEditingController _redirect = TextEditingController(
@@ -42,10 +44,12 @@ class _LoginScreenState extends State<LoginScreen> {
     _channel = TextEditingController(text: c.channelId);
     _authBase = TextEditingController(text: c.authBaseUrl);
     _authChannel = TextEditingController(text: c.authChannelId);
-    if (offlineAutostart) {
+    _kvBase = TextEditingController(text: c.kvBaseUrl);
+    if (offlineAutostart || offlineAutostartKv) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _offline();
-        if (mounted && session.signedIn) await _enterLobby();
+        if (!mounted || !session.signedIn) return;
+        await (offlineAutostartKv ? _openKv() : _enterLobby());
       });
     }
   }
@@ -57,6 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _channel,
       _authBase,
       _authChannel,
+      _kvBase,
       _jwt,
       _returned,
       _redirect,
@@ -71,6 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
     channelId: _channel.text.trim(),
     authBaseUrl: _authBase.text.trim(),
     authChannelId: _authChannel.text.trim(),
+    kvBaseUrl: _kvBase.text.trim(),
   );
 
   Future<void> _run(Future<void> Function() action) async {
@@ -138,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await startOfflineDemo(session);
     _gateway.text = session.config.gatewayUrl;
     _channel.text = session.config.channelId;
+    _kvBase.text = session.config.kvBaseUrl;
   });
 
   Future<void> _enterLobby() async {
@@ -150,6 +157,17 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_error != null || !mounted) return;
     // Outside _run: the lobby visit must not hold this screen busy.
     await Navigator.of(context).pushNamed(LobbyScreen.route);
+  }
+
+  Future<void> _openKv() async {
+    await _run(() async {
+      session.updateConfig(_readConfig());
+      if (!session.config.canUseKv) {
+        throw StateError('key-value base URL is required');
+      }
+    });
+    if (_error != null || !mounted) return;
+    await Navigator.of(context).pushNamed(KvScreen.route);
   }
 
   @override
@@ -181,6 +199,12 @@ class _LoginScreenState extends State<LoginScreen> {
           TextField(
             controller: _authChannel,
             decoration: const InputDecoration(labelText: 'Auth channel id'),
+          ),
+          TextField(
+            controller: _kvBase,
+            decoration: const InputDecoration(
+              labelText: 'Key-value store base URL (https://doc…)',
+            ),
           ),
           const SizedBox(height: 16),
           Text('Sign in', style: Theme.of(context).textTheme.titleMedium),
@@ -244,6 +268,11 @@ class _LoginScreenState extends State<LoginScreen> {
             key: const Key('enter-lobby'),
             onPressed: _busy || !session.signedIn ? null : _enterLobby,
             child: const Text('Enter the lobby'),
+          ),
+          FilledButton.tonal(
+            key: const Key('open-kv'),
+            onPressed: _busy || !session.signedIn ? null : _openKv,
+            child: const Text('Key-value store'),
           ),
           if (_error != null)
             Padding(

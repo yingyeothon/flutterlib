@@ -4,7 +4,7 @@
 
 | Layer | Owns | Gated by |
 | --- | --- | --- |
-| `docs/` (indexed by `docs/README.md`) | the consumer's flow: getting started, auth, lobby, dungeon, lifecycle, errors, Flutter, troubleshooting | `check_docs` 1, 2, 6 (the `40xx` codes only), 7 |
+| `docs/` (indexed by `docs/README.md`) | the consumer's flow: getting started, auth, lobby, dungeon, key-value store, lifecycle, errors, Flutter, troubleshooting | `check_docs` 1, 2, 6 (the `40xx` codes only), 7 |
 | `packages/<name>/README.md` | that package's purpose, install snippet, usage, `## Public API`, differences from the originals | `check_docs` 3, 5 |
 | root `README.md` | what the library is, the package table, the dependency graph | `check_docs` 3, 4 |
 | `///` doc comments | what a consumer needs at the call site | `dart analyze` (`public_member_api_docs` is an error) |

@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 
+import 'fake_kv.dart';
+
 /// A `q` connection as the game-side hook sees it.
 abstract interface class GameSession {
   /// The game id from the URL.
@@ -44,6 +46,7 @@ final class FakeGatewayOptions {
     },
     this.onGameFrame,
     this.maxPeers = 64,
+    this.kvCollections = const <FakeKvCollection>[],
   });
 
   /// Tokens the handshake accepts; `null` accepts any non-empty token.
@@ -69,6 +72,9 @@ final class FakeGatewayOptions {
 
   /// `hello.aoi.maxPeers`.
   final int maxPeers;
+
+  /// The collections `/kv/*` serves; empty means every kv route is a `404`.
+  final List<FakeKvCollection> kvCollections;
 }
 
 /// The fake gateway. Start one with [FakeGateway.start].
@@ -84,6 +90,13 @@ abstract interface class FakeGateway {
 
   /// Where the map document is served.
   Uri get mapUrl;
+
+  /// The origin for `KvStoreClientOptions.baseUrl`, `http://127.0.0.1:port`;
+  /// the same listener serves `/kv/*`.
+  Uri get kvUrl;
+
+  /// The in-memory store behind `/kv/*`, to read what a client wrote.
+  FakeKvStore get kv;
 
   /// The bound port.
   int get port;
@@ -182,7 +195,12 @@ final class _GameConnection implements GameSession {
 }
 
 final class _FakeGateway implements FakeGateway {
-  _FakeGateway(this._server, this._options) {
+  _FakeGateway(this._server, this._options)
+    : kv = FakeKvStore(
+        _options.kvCollections,
+        userIdOf: _userIdOf,
+        acceptedTokens: _options.acceptedTokens,
+      ) {
     _flush = Timer.periodic(
       Duration(milliseconds: _options.tick),
       (_) => _flushPositions(),
@@ -198,6 +216,8 @@ final class _FakeGateway implements FakeGateway {
 
   final HttpServer _server;
   final FakeGatewayOptions _options;
+  @override
+  final FakeKvStore kv;
   late final Timer _flush;
   final Map<String, _LobbyConnection> _lobby = <String, _LobbyConnection>{};
   final Map<String, _Peer> _peers = <String, _Peer>{};
@@ -214,6 +234,8 @@ final class _FakeGateway implements FakeGateway {
   Uri get wsUrl => Uri.parse('ws://127.0.0.1:$port');
   @override
   Uri get mapUrl => Uri.parse('http://127.0.0.1:$port/map.json');
+  @override
+  Uri get kvUrl => Uri.parse('http://127.0.0.1:$port');
   @override
   Set<String> get lobbyUsers => _lobby.keys.toSet();
   @override
@@ -281,6 +303,10 @@ final class _FakeGateway implements FakeGateway {
       if (request.uri.path == '/livez') {
         request.response.write('ok');
         await request.response.close();
+        return;
+      }
+      if (FakeKvStore.handles(request.uri.path)) {
+        await kv.handle(request);
         return;
       }
       if (!WebSocketTransformer.isUpgradeRequest(request)) {

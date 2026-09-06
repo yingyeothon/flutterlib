@@ -8,6 +8,8 @@ class OfflineDemo {
 
   String get gatewayUrl => '';
 
+  String get kvUrl => '';
+
   Future<void> seedPeers(String zone, {int count = 3}) async {}
 
   Future<void> closeUser(String userId, int code) async {}

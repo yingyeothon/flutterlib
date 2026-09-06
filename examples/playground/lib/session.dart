@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:yingyeothon_auth_client/yingyeothon_auth_client.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
+import 'package:yingyeothon_kvstore_client/yingyeothon_kvstore_client.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 
 import 'config.dart';
@@ -61,6 +62,9 @@ class Session extends ChangeNotifier {
   }
 
   void note(String text) {
+    // A debug build also prints, so a smoke run driven from a terminal
+    // (rules/manual-verification.md) can read the SDK's lines on stdout.
+    if (kDebugMode) debugPrint(text);
     log.add(LogLine(text, DateTime.now()));
     if (log.length > 400) log.removeAt(0);
     notifyListeners();
@@ -79,10 +83,12 @@ class Session extends ChangeNotifier {
     notifyListeners();
   }
 
-  AuthClient authClient() => AuthClient(
-    baseUrl: Uri.parse(config.authBaseUrl),
-    channelId: config.authChannelId,
-  );
+  AuthClient authClient() {
+    // tryParse: a FormatException would quote the pasted text.
+    final baseUrl = Uri.tryParse(config.authBaseUrl);
+    if (baseUrl == null) throw StateError('auth base URL is not a URL');
+    return AuthClient(baseUrl: baseUrl, channelId: config.authChannelId);
+  }
 
   // ---- lobby ---------------------------------------------------------------
 
@@ -233,11 +239,111 @@ class Session extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- kv ------------------------------------------------------------------
+
+  /// The store client for the current token; a new token is a new client.
+  KvStoreClient? kv;
+
+  /// What the Announcements card shows, newest first.
+  List<KvListEntry> announcements = const <KvListEntry>[];
+
+  /// What the My settings card last read or wrote; `null` until loaded.
+  KvEntry? settings;
+
+  /// Whether the last settings read found no entry.
+  bool settingsAbsent = false;
+
+  /// Names of the two collections the guide's cases use; the offline demo
+  /// seeds both, a real project creates them in the console.
+  static const String announcementsCollection = 'announcements';
+
+  /// See [announcementsCollection].
+  static const String profileCollection = 'profile';
+
+  /// Creates (or recreates) the client from the config and the token.
+  KvStoreClient openKv() {
+    final jwt = token?.jwt;
+    if (jwt == null) throw StateError('sign in first');
+    if (!config.canUseKv) throw StateError('key-value base URL is required');
+    // tryParse: a FormatException would quote the pasted text.
+    final baseUrl = Uri.tryParse(config.kvBaseUrl);
+    if (baseUrl == null) throw StateError('key-value base URL is not a URL');
+    closeKv();
+    final client = KvStoreClient(
+      KvStoreClientOptions(baseUrl: baseUrl, token: jwt, logger: logger),
+    );
+    kv = client;
+    notifyListeners();
+    return client;
+  }
+
+  Future<void> loadAnnouncements() async {
+    final client = kv ?? openKv();
+    final page = await client
+        .collection(announcementsCollection)
+        .list(values: true, order: KvOrder.desc);
+    announcements = page.entries;
+    note('announcements: ${page.entries.length} entries');
+    notifyListeners();
+  }
+
+  Future<void> loadSettings() async {
+    final client = kv ?? openKv();
+    final entry = await client
+        .collection(profileCollection)
+        .mine
+        .getEntry('settings');
+    settings = entry;
+    settingsAbsent = entry == null;
+    note(
+      entry == null ? 'settings: absent' : 'settings: version ${entry.version}',
+    );
+    notifyListeners();
+  }
+
+  /// Merges [changes] over what was last read and writes it back, then
+  /// reads it again so the version shown is the stored one.
+  Future<void> saveSettings(Map<String, Object?> changes) async {
+    final client = kv ?? openKv();
+    final current = settings?.value;
+    final merged = <String, Object?>{
+      if (current is Map<String, Object?>) ...current,
+      ...changes,
+    };
+    // Write only over the version that was read: a save from another device
+    // in between is a 409 (isVersionMismatch), not a lost update.
+    final result = await client
+        .collection(profileCollection)
+        .mine
+        .put(
+          'settings',
+          merged,
+          ifMatch: settings?.version,
+          ifNoneMatch: settings == null && settingsAbsent,
+        );
+    note(
+      'settings: ${result.created == true ? 'created' : 'updated'}'
+      '${result.version == null ? '' : ' version ${result.version}'}',
+    );
+    await loadSettings();
+  }
+
+  void closeKv() {
+    kv?.close();
+    kv = null;
+    announcements = const <KvListEntry>[];
+    settings = null;
+    settingsAbsent = false;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
     unawaited(closeLobby());
     unawaited(closeGame());
+    kv?.close();
+    kv = null;
     super.dispose();
   }
 }

@@ -117,4 +117,6 @@ over the real transport. That is also how the SDK's own end-to-end tests run.
 
 - Every close code and what the client does: [Connection lifecycle](connection-lifecycle.md).
 - Every refusal you can get back: [Errors](errors.md).
+- Announcements and a player's own record over HTTP, with the same token:
+  [Key-value store](kvstore.md).
 - Web, background, `dispose()`: [Flutter](flutter.md).

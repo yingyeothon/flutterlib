@@ -1,0 +1,19 @@
+name: yingyeothon_kvstore_client
+description: Client for the yyt key-value store - read a collection, save and load a player's own record, with the channel JWT the game already holds.
+version: 0.1.0
+# Installed by git dependency; nothing is on pub.dev (rules/release.md).
+publish_to: none
+repository: https://github.com/yingyeothon/flutterlib
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dependencies:
+  http: ^1.6.0
+  yingyeothon_codec:
+    path: ../yingyeothon_codec
+  yingyeothon_logger:
+    path: ../yingyeothon_logger
+dev_dependencies:
+  test: ^1.31.0
+  yingyeothon_fake_gateway:
+    path: ../yingyeothon_fake_gateway

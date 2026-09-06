@@ -3,7 +3,8 @@
 The Dart client libraries for the **yyt platform**: point them at the channels you
 provisioned in the [yyt console](https://console.yyt.life/ui/) and a Flutter game is
 talking to the realtime gateway — positions, chat, parties, and a dungeon run against
-your own game actor — with the sign-in flow that gets it a token.
+your own game actor — with the sign-in flow that gets it a token and a key-value
+store for announcements and each player's own record.
 
 Pure Dart, no Flutter import, so the same packages run on Android, iOS, desktop and
 web, and `dart test` covers them without a device.
@@ -32,6 +33,7 @@ lobby.pos(zone: hello.zone, x: 1, y: 2, dir: 'n');
 | [Console and options](docs/console-and-options.md) | what the console hands you, and every option |
 | [Authentication](docs/authentication.md) | how a client gets its channel JWT |
 | [Lobby](docs/lobby.md) / [Dungeon](docs/dungeon.md) | the two channel kinds, feature by feature |
+| [Key-value store](docs/kvstore.md) | announcements and a player's own record, with the same token |
 | [Connection lifecycle](docs/connection-lifecycle.md) | states, events, reconnect, backoff |
 | [Errors](docs/errors.md) / [Troubleshooting](docs/troubleshooting.md) | every refusal, close code and symptom |
 | [Flutter](docs/flutter.md) | platforms, background, debug hooks, desktop verification |
@@ -46,6 +48,7 @@ lobby.pos(zone: hello.zone, x: 1, y: 2, dir: 'n');
 | [yingyeothon_event_broker](packages/yingyeothon_event_broker) | Type-keyed asynchronous event broker |
 | [yingyeothon_gamebase_client](packages/yingyeothon_gamebase_client) | Client SDK for the yyt realtime gateway (lobby + dungeon `q`) |
 | [yingyeothon_auth_client](packages/yingyeothon_auth_client) | The client half of the auth channel: config, sign-in URL, redirect, exchange, verify |
+| [yingyeothon_kvstore_client](packages/yingyeothon_kvstore_client) | Client for the yyt key-value store: collections by name, `me` namespace, versions, TTL, `incr` |
 | [yingyeothon_fake_gateway](packages/yingyeothon_fake_gateway) | In-process gateway for tests and the offline demo; never published |
 
 The arrows are the `dependencies:` each pubspec declares; `event_broker` stands alone.
@@ -56,6 +59,8 @@ graph LR
   yingyeothon_gamebase_client --> yingyeothon_logger
   yingyeothon_logger --> yingyeothon_codec
   yingyeothon_auth_client --> yingyeothon_codec
+  yingyeothon_kvstore_client --> yingyeothon_codec
+  yingyeothon_kvstore_client --> yingyeothon_logger
   yingyeothon_fake_gateway --> yingyeothon_codec
 ```
 
@@ -71,7 +76,8 @@ has twenty packages; the rest are AWS Lambda, Redis or Node-socket server code t
 cannot run on a phone. Two things are new here: `yingyeothon_auth_client`, because a
 Flutter app signs in through a browser redirect and the parsing is easy to get
 wrong, and `yingyeothon_fake_gateway`, so the SDK is tested end to end and the example
-runs with no credential.
+runs with no credential. `yingyeothon_kvstore_client` is the Dart port of tslib's
+`kvstore-client`, with the same shape in all three languages.
 
 ## Install
 
@@ -89,6 +95,10 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_auth_client
+  yingyeothon_kvstore_client:
+    git:
+      url: https://github.com/yingyeothon/flutterlib.git
+      path: packages/yingyeothon_kvstore_client
 ```
 
 **No release has been tagged yet**, so these track `main`. Nothing is on pub.dev.

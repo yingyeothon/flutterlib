@@ -26,6 +26,12 @@ process and connects the SDK to it over the real transport. Walk the change:
 - Debug drawer → *Force close 4002*: the banner shows reconnecting, then connected;
   *Force close 4000*: stopped, no retry. *Abort q* on the dungeon screen: the Aborted
   banner.
+- Login → **Key-value store**: the Announcements card lists two seeded notices,
+  newest first; *Save* on My settings shows `Stored: {"volume":0.5} (version 1)`,
+  a second *Save* shows version 2, *Load* reads it back; the log panel shows `kv
+  request` lines with a route kind and a status and never a key or the token (the
+  offline token is `you`, which is also the user id, so look for `Bearer` rather
+  than for the token text; `kv_screen_test.dart` does the same).
 - `flutter run -d linux --release`: the Offline demo button and the Debug drawer are
   absent.
 
@@ -36,12 +42,13 @@ package:
 
 | Hook | What it does |
 | --- | --- |
-| Offline demo | starts the fake gateway, fills the config with its URL and a plain token |
+| Offline demo | starts the fake gateway (lobby, `q` and `/kv/*`), fills the config with its URLs and a plain token |
 | Seed 3 peers | connects three raw sockets to the fake as `seed-1..3` and moves them every 400 ms |
 | Force close *code* | asks the fake to close your lobby socket with `4000`, `4002`, `4004`, `4005` or `1001` |
 | Abort (4001) / Finish (1000) | closes your `q` socket with that code (dungeon screen) |
 | Log panel | the SDK's logger at `debug`, rendered in the app |
 | `--dart-define=YYT_OFFLINE_AUTOSTART=true` | on launch: offline demo, enter the lobby, seed the peers — no input needed |
+| `--dart-define=YYT_OFFLINE_AUTOSTART_KV=true` | on launch: offline demo, open the key-value screen, save one settings record |
 
 Without a UI driver (an agent, a headless box), build with the autostart define,
 launch the binary, and read the log panel or stdout; that is how the ritual's "a

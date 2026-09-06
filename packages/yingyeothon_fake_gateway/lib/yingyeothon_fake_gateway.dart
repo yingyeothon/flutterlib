@@ -5,7 +5,8 @@
 /// subprotocol handshake, `hello`, zones and the peer map frames, chat and
 /// events by scope, parties with the gateway's `omitempty` marshalling,
 /// `ping`/`pong`, the documented refusal codes, and the close codes a test
-/// injects. It is not the gateway: no rate limiting, no area of interest,
+/// injects, plus the state stack's `/kv/*` routes over an in-memory store
+/// for the key-value client. It is not the gateway: no rate limiting, no area of interest,
 /// no persistence, no real token verification — a token is accepted as an
 /// identity, and its user id is the JWT `sub` when it parses as one or the
 /// token text itself otherwise.
@@ -15,3 +16,4 @@ library;
 
 export 'src/fake_gateway.dart'
     show FakeGateway, FakeGatewayOptions, GameFrameHandler, GameSession;
+export 'src/fake_kv.dart' show FakeKvCollection, FakeKvStore;

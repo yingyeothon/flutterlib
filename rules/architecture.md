@@ -74,6 +74,43 @@
   frame is ignored for rendering and logged at `debug` (type only). An `enter`
   without a `userId` is a protocol error, not a peer named `""`.
 
+## The key-value client (`kvstore_client`)
+
+- One request choke point (`internal/requester.dart`): the token is used in exactly
+  one place, every URL is built by `KvPaths.resolve` from checked segments, and one
+  `debug` line per request carries the method, the route *kind*, the status and the
+  body length — never the collection, the owner or the key.
+- **Absent is `orElse`.** A stored JSON `null` decodes to Dart `null`, so `get()`
+  cannot return `null` for a missing key: `getEntry()` is the null-returning tier
+  and `get(key, orElse:)` the value tier. Do not "simplify" `get()` to return `null`
+  on 404; the offline demo's "no settings yet" case is exactly the one it breaks.
+- A 404 is one answer for "no such key" and "no such collection in this project";
+  the client cannot tell them apart without reading the message, and messages are
+  not a contract. `delete()` folds it too: a reader's delete of a missing key is a
+  `404` on the server (`deleteEntry` reports `missing` before it compares the
+  version), a write-only caller's is `204`, and neither is an error to the caller.
+- The server's own README and a todo's "facts" list are summaries; the route source
+  (`services/state/src/kvstore.ts`) is what the fake and the client follow. Two of
+  the todo's facts were wrong against it (delete is not "204 always"; a deleted row
+  is removed and a reborn key restarts at version 1, only an *expired* row keeps its
+  version). Check each fact against the source before pinning it in a test.
+- One `.timeout` around the whole exchange (headers and body together): a per-chunk
+  `stream.timeout` lets a drip-fed body run until the byte cap. A token is checked
+  for printable ASCII at construction because `dart:io` refuses any other header
+  value with a `FormatException` that quotes the whole `Bearer …` line; the last
+  `on Exception` in the requester exists for the same family of messages.
+- A server-chosen `code` or `reason` is kept only when it matches
+  `^[a-z][a-z0-9_]{0,63}$`; it reaches `toString()` and log lines, and an `http://`
+  base URL means whatever answered chose it.
+- Grammar is checked locally only where the server checks it (`KvRules`, cited to
+  `service/packages/console-db/src/kvstore.ts`); the owner grammar is checked too
+  because an owner goes on the path unencoded. The `me` alias passes as itself.
+- `http.Request.body` appends a charset to a content type set *before* it; set the
+  body first and the header after, or the header a test pins changes.
+- A write-only caller sees `204` and no `ETag` on every write; `created` and
+  `version` are null then (`expiresAt` still arrives when that write set a `ttl`),
+  and `created` is derived from the status only when a version came back.
+
 ## Seams
 
 - Transport: `GatewayWebSocketFactory` / `GatewayWebSocket` (`Stream<SocketEvent>`). The
@@ -81,8 +118,9 @@
   injects nothing and points at the fake gateway's URL. A transport connects in its
   constructor and buffers events until listened to — a subscriber that arrives late
   must not deadlock a handshake that never started.
-- HTTP: `MapHttpFetcher` for the map, `http.Client` for auth. Both default to
-  `package:http` with a timeout, a size cap and a redirect budget.
+- HTTP: `MapHttpFetcher` for the map, `http.Client` for auth and the key-value
+  store. All default to `package:http` with a timeout and a size cap (the map
+  fetcher adds a redirect budget); the store's cap is 4 MiB, a full page of values.
 - Time: `Timer` and `package:fake_async` in tests. No clock abstraction; Dart's is
   enough.
 - Random: `BackoffOptions.random`, defaulting to a fresh `Random()` per backoff so two

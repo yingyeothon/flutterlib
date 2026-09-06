@@ -11,8 +11,9 @@
   ≥ 80 %, branch ≥ 70 %. A sibling's suite walking through your code does not count.
 - Test files live in `packages/<name>/test/`, import only the public barrel, and share
   doubles from `packages/yingyeothon_gamebase_client/test/support/` (the other
-  packages keep theirs inline). If a test needs something internal, that thing should
-  be public or the test is testing the wrong layer.
+  packages keep theirs in their own `test/`, inline or in one support file such as
+  `kvstore_client/test/fake_http_client.dart`). If a test needs something internal,
+  that thing should be public or the test is testing the wrong layer.
 
 ## Doubles
 
@@ -27,7 +28,12 @@
 - Random: `BackoffOptions(random: () => 0.5)`; test the jitter edges with `0` and
   `0.999999`.
 - HTTP: a scripted `MapHttpFetcher` or an `http.BaseClient` subclass with an answer
-  queue. Never a real host.
+  queue (`auth_client/test/`, `kvstore_client/test/fake_http_client.dart`, which
+  also stalls headers or a body to drive the timeout). Never a real host.
+- `flutter_test` replaces every `HttpClient` with one that answers an empty `400`;
+  a widget test that talks HTTP to the fake gateway sets `HttpOverrides.global =
+  null` in `setUp` (each test file is its own isolate). WebSocket tests are not
+  affected, which is why the lobby tests never needed it.
 - Logging: `CapturingLogWriter` (`gamebase_client/test/support/harness.dart`; the
   logger suite has its own copy) records `LogWriters.format` output, so a test
   asserts whole lines.
@@ -64,8 +70,12 @@
   and take `closeCode` there (`ScriptedServer.closedCode`).
 - Give every await in an integration test a timeout (`soon()`), so a hang is a
   failure with a name rather than a 30-second silence.
-- The fake gateway's tests drive it with raw `dart:io` sockets, so the fake is tested
-  against the protocol, not against the SDK it exists to test.
+- The fake gateway's tests drive it with raw `dart:io` sockets, and its `/kv/*` routes
+  with a raw `HttpClient`, so the fake is tested against the protocol, not against
+  the SDK it exists to test.
+- The store's integration test walks the guide's two cases against the fake, and,
+  when `YYT_KV_BASE_URL` and `YYT_KV_TOKEN` are set, against dev; without them it is
+  skipped, never failed. Neither value is printed.
 
 ## Gate scripts are code
 

@@ -118,7 +118,8 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
 
 ## Scope decisions already made
 
-- Six packages, no more without a reason that survives "can this run on a phone?".
+- Seven packages (`kvstore_client` was added as the seventh by owner decision), no
+  more without a reason that survives "can this run on a phone?".
 - The gateway wire protocol is owned by the `service` repository. When it changes,
   this SDK follows it — never the other way round.
 - The example is one app (`playground`) that exercises every package; a second
