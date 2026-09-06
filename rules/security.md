@@ -9,7 +9,7 @@
   keystore, no provisioning profile, no `google-services.json` — a file of that shape
   is a mistake, not configuration.
 - Hostnames are allowed only where the sibling **public** `service` repo already
-  publishes them (`gw`, `auth`, `console`, `d` and their `-dev` twins under
+  publishes them (`gw`, `auth`, `console`, `d`, `doc` and their `-dev` twins under
   `yyt.life`). Repeating what is already public is not a disclosure; being the first to
   publish something is. Check `git grep` in `service` before adding a new one, and
   never add a stateful host, database or account name — those live in the private ops

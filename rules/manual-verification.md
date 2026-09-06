@@ -77,10 +77,51 @@ a second client (the web build, `flutter run -d chrome`, once per release) sees 
 first. Web is the one platform where the subprotocol path runs in a browser; Android
 or iOS is where background-resume reconnect is proven.
 
+## The key-value store against dev
+
+With a `yyt` login on `console-dev.yyt.life` (`yyt login --profile dev --api
+https://console-dev.yyt.life --device`, once), provision with the CLI, run the store's
+integration test, then delete what you made (verified 2026-09-06). `<throwaway>` is a
+team name of yours (`kv-it-<login>`; a team name is also its join key, so never a
+real one), `<scratch>` is the session scratchpad, never a path under the tree:
+
+```bash
+export YYT_PROFILE=dev
+yyt team create <throwaway> && yyt --team <throwaway> project create game
+export YYT_TEAM=<throwaway> YYT_PROJECT=game
+# prints the channel secret once: do not paste that output anywhere
+yyt channels create --kind auth --name kv-it-auth-<yyyymmdd> --audience <throwaway> --json | jq -r .id
+yyt kv create announcements --read project --write team
+yyt kv create profile --read user --write user
+yyt kv entry put announcements 2026-09-01 --value '{"title":"Welcome"}'
+# mint a player JWT for that channel the way the service repo's smoke scripts do
+# (`mintToken` in scripts/smoke/_lib.mjs; the "kv smoke" line of its
+# rules/manual-verification.md) into <scratch>/jwt.txt. It needs a dev secret only
+# that repo's local/ holds: without it, stop and ask the user for the file rather
+# than trying another way. The user id MUST be 32 lowercase hex characters (or
+# `{kind}:{id}`): `me` resolves to the JWT's sub, and a sub outside the owner
+# grammar answers `400 invalid ownerId` on every /u/me route.
+(cd packages/yingyeothon_kvstore_client && YYT_KV_BASE_URL=https://doc-dev.yyt.life \
+  YYT_KV_TOKEN="$(cat <scratch>/jwt.txt)" dart test test/integration/round_trip_test.dart)
+  # YYT_KV_ANNOUNCEMENTS / YYT_KV_PROFILE override the two collection names
+yyt kv delete announcements && yyt kv delete profile && yyt channels delete auth_…
+rm <scratch>/jwt.txt
+```
+
+`project delete` and `team delete` then answer `conflict` until the daily sweep
+hard-purges the soft-deleted channel, 30 days after the delete. Do not work around
+it: reuse the same throwaway team and project on the next run (find, then create
+only when absent — a fresh team per run counts against the member's team cap and
+cannot be deleted for 30 days), stamp the channel name with the date because a
+deleted channel parks its name for those 30 days, and try the two deletes then. The JWT lives
+in `<scratch>/jwt.txt` for the run and nowhere else: never under the tree, never
+`echo`ed, never in a commit message.
+
 ## Method
 
 - Vary one thing at a time. A claim that a change restored a behaviour needs a
   negative control: the same steps on the previous commit.
 - Record each run in the commit message body, one line: `Verified: offline demo on
-  linux, walked <steps>` (or `Verified: dev gateway, …`). There are no PRs to carry
+  linux, walked <steps>` (or `Verified: dev gateway, …`, `Verified: dev kv,
+  round_trip_test`). There are no PRs to carry
   it and no docs page owns it.
