@@ -153,7 +153,15 @@ Rules the map applies so you do not have to:
   `pos`.
 
 `snapshots`, `peerEntered`, `peerLeft` and `peerMoved` fire after the map changed; a
-`snapshot` that changes nothing still fires `snapshots`.
+`snapshot` that changes nothing still fires `snapshots`, and a `peerMoved` entry is a
+relayed `pos`, not a proven move. The gateway relays each peer's latest accepted
+`pos` every tick, one that repeats the spot or changes only `dir` included, and a
+peer that just came into view — through `snapshots` or `peerEntered` — often comes
+again, at the same spot, in the next `pos` batch. Rendering from `peers.all()` is
+unaffected. Per-step work — a footstep, the start of a tween — keeps its own last
+`x`/`y` per `userId` (replaced on `snapshots`, set on `peerEntered`, dropped on
+`peerLeft`) and skips an entry that equals it: by the time `peerMoved` fires,
+`peers.get(id)` already holds the new position.
 
 **Area of interest.** A view holds at most `aoi.maxPeers` nearest peers (default 64,
 at most 256), and with `aoi.range` only those inside the box around your last `pos`.

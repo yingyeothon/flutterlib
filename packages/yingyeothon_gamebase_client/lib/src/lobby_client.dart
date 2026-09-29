@@ -166,7 +166,8 @@ abstract interface class GatewayLobbyClient {
   /// A peer left the view (its user id).
   Stream<String> get peerLeft;
 
-  /// Peers moved this tick.
+  /// Peers moved this tick, as the gateway relayed them: an entry can repeat
+  /// a peer's last position, and [peers] already holds the new one.
   Stream<List<Peer>> get peerMoved;
 
   /// Chat arrived.
