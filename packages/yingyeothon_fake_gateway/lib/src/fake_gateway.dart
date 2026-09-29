@@ -47,6 +47,10 @@ final class FakeGatewayOptions {
     this.onGameFrame,
     this.maxPeers = 64,
     this.kvCollections = const <FakeKvCollection>[],
+    this.channels,
+    this.games,
+    this.clock,
+    this.maxMoveDelta,
   });
 
   /// Tokens the handshake accepts; `null` accepts any non-empty token.
@@ -75,6 +79,24 @@ final class FakeGatewayOptions {
 
   /// The collections `/kv/*` serves; empty means every kv route is a `404`.
   final List<FakeKvCollection> kvCollections;
+
+  /// Channel ids the handshake knows; any other answers `404`. `null`
+  /// accepts every channel.
+  final Set<String>? channels;
+
+  /// The `q` start events: game id → member user ids. A handshake for a game
+  /// not listed, or by a user not in it, answers `403` — one code for both,
+  /// like the gateway. `null` accepts every game and member.
+  final Map<String, Set<String>>? games;
+
+  /// The clock the actor-death rule reads; `DateTime.now` by default.
+  final DateTime Function()? clock;
+
+  /// A `pos` inside your current zone that moves either axis further than
+  /// this is refused with `move_too_far`, measured from where the fake has
+  /// you — a retained position included. `null` (the default) checks
+  /// nothing; the gateway's own default is 3.
+  final double? maxMoveDelta;
 }
 
 /// The fake gateway. Start one with [FakeGateway.start].
@@ -126,6 +148,26 @@ abstract interface class FakeGateway {
   /// Sends a binary frame to [userId]'s lobby socket.
   void sendBinary(String userId, List<int> bytes);
 
+  /// Refuses the next [count] handshakes with [status] before any other
+  /// check, for the answers a fake cannot earn on its own: `410` (channel
+  /// expired), `429` (handshake burst), `502` and `503`.
+  void refuseHandshakes(int status, {int count = 1});
+
+  /// [gameId]'s actor stops consuming: every push (an `enter`, a game frame)
+  /// deepens its queue instead of reaching [FakeGatewayOptions.onGameFrame],
+  /// and the gateway's death rule applies — depth over 200, or over 20 for
+  /// more than 5 s, closes every member with `4001` and forgets the game.
+  void stallGame(String gameId);
+
+  /// Holds [userId]'s lobby frames as a reader that stopped draining would:
+  /// they wait in the 256-frame outbound queue, a full queue drops its
+  /// oldest `pos` batch, and a queue of nothing but control frames closes the
+  /// socket with `4005`.
+  void holdOutbound(String userId);
+
+  /// Delivers what [holdOutbound] kept, in order, and stops holding.
+  void releaseOutbound(String userId);
+
   /// Closes every socket and the listener.
   Future<void> shutdown();
 }
@@ -140,6 +182,27 @@ void _safeAdd(WebSocket socket, Object data) {
   } on StateError {
     // Closed between the check and the add.
   }
+}
+
+/// The gateway's outbound frame cap, in bytes.
+const int _maxOutboundBytes = 32 << 10;
+
+/// The gateway's per-socket outbound queue depth.
+const int _outboundQueueDepth = 256;
+
+/// What the gateway sends in place of a frame over [_maxOutboundBytes].
+String _frameTooLarge(int bytes) => Json.encode(<String, Object?>{
+  'type': 'error',
+  'code': 'frame_too_large',
+  'message':
+      'a $bytes-byte frame exceeded the $_maxOutboundBytes-byte outbound '
+      'cap and was dropped',
+});
+
+/// [text] if it fits the outbound cap, else the refusal that replaces it.
+String _capped(String text) {
+  final bytes = utf8.encode(text).length;
+  return bytes > _maxOutboundBytes ? _frameTooLarge(bytes) : text;
 }
 
 final class _Peer {
@@ -171,6 +234,19 @@ final class _LobbyConnection {
   _LobbyConnection(this.userId, this.socket);
   final String userId;
   final WebSocket socket;
+
+  /// Frames kept by [FakeGateway.holdOutbound]; `null` delivers at once.
+  List<({String text, bool droppable})>? held;
+
+  /// Closed with `4005`: the backlog is gone and nothing more is sent.
+  bool tooSlow = false;
+}
+
+/// A `q` game's actor queue, as far as the death rule needs it.
+final class _Actor {
+  bool stalled = false;
+  int depth = 0;
+  DateTime? lastHealthy;
 }
 
 final class _GameConnection implements GameSession {
@@ -183,11 +259,11 @@ final class _GameConnection implements GameSession {
   final WebSocket socket;
 
   @override
-  void send(Object? frame) => _safeAdd(socket, Json.encode(frame));
+  void send(Object? frame) => _safeAdd(socket, _capped(Json.encode(frame)));
 
   @override
   void broadcast(Object? frame) {
-    final text = Json.encode(frame);
+    final text = _capped(Json.encode(frame));
     for (final c in gateway._games[gameId]?.values ?? <_GameConnection>[]) {
       _safeAdd(c.socket, text);
     }
@@ -226,7 +302,12 @@ final class _FakeGateway implements FakeGateway {
   final Map<String, List<JsonObject>> _received = <String, List<JsonObject>>{};
   final Map<String, Map<String, _GameConnection>> _games =
       <String, Map<String, _GameConnection>>{};
+  final Map<String, _Actor> _actors = <String, _Actor>{};
   int _partySeq = 0;
+  int _refuseStatus = 0;
+  int _refuseCount = 0;
+
+  DateTime _now() => (_options.clock ?? DateTime.now)();
 
   @override
   int get port => _server.port;
@@ -276,6 +357,33 @@ final class _FakeGateway implements FakeGateway {
   }
 
   @override
+  void refuseHandshakes(int status, {int count = 1}) {
+    _refuseStatus = status;
+    _refuseCount = count;
+  }
+
+  @override
+  void stallGame(String gameId) =>
+      _actors.putIfAbsent(gameId, _Actor.new).stalled = true;
+
+  @override
+  void holdOutbound(String userId) {
+    final c = _lobby[userId];
+    if (c != null) c.held ??= <({String text, bool droppable})>[];
+  }
+
+  @override
+  void releaseOutbound(String userId) {
+    final c = _lobby[userId];
+    final held = c?.held;
+    if (c == null || held == null) return;
+    c.held = null;
+    for (final q in held) {
+      _safeAdd(c.socket, q.text);
+    }
+  }
+
+  @override
   Future<void> shutdown() async {
     _flush.cancel();
     for (final c in _lobby.values.toList()) {
@@ -313,15 +421,27 @@ final class _FakeGateway implements FakeGateway {
         await _reject(request, HttpStatus.notFound);
         return;
       }
+      if (_refuseCount > 0) {
+        _refuseCount--;
+        await _reject(request, _refuseStatus);
+        return;
+      }
       final channel = request.uri.queryParameters['channel'];
       if (channel == null || channel.isEmpty) {
         await _reject(request, HttpStatus.badRequest);
         return;
       }
+      // The gateway's order: a missing bearer (401), then the channel
+      // lookup (404), then the token itself (401), then `q` membership (403).
       final protocols = _subprotocols(request);
       final bearerAt = protocols.indexOf('bearer');
       if (bearerAt < 0 || bearerAt + 1 >= protocols.length) {
         await _reject(request, HttpStatus.unauthorized);
+        return;
+      }
+      final channels = _options.channels;
+      if (channels != null && !channels.contains(channel)) {
+        await _reject(request, HttpStatus.notFound);
         return;
       }
       final token = protocols[bearerAt + 1];
@@ -331,9 +451,19 @@ final class _FakeGateway implements FakeGateway {
         return;
       }
       final userId = _userIdOf(token);
-      final gameId =
-          request.uri.queryParameters['gameId'] ??
-          request.headers.value('x-game-id');
+      // Like the gateway: `gameId`, or when it is absent or empty `x-game-id`.
+      final query = request.uri.queryParameters;
+      final named = query['gameId'];
+      final gameId = named != null && named.isNotEmpty
+          ? named
+          : query['x-game-id'];
+      final games = _options.games;
+      if (gameId != null &&
+          games != null &&
+          !(games[gameId]?.contains(userId) ?? false)) {
+        await _reject(request, HttpStatus.forbidden);
+        return;
+      }
       final socket = await WebSocketTransformer.upgrade(
         request,
         protocolSelector: (_) => 'bearer',
@@ -386,7 +516,12 @@ final class _FakeGateway implements FakeGateway {
   // ---- q -------------------------------------------------------------------
 
   void _attachGame(String gameId, String userId, WebSocket socket) {
-    final game = _games.putIfAbsent(gameId, () => <String, _GameConnection>{});
+    final game = _games.putIfAbsent(gameId, () {
+      // A new game object starts healthy, as the gateway's does; the queue
+      // (and its depth) outlives it.
+      _actors[gameId]?.lastHealthy = _now();
+      return <String, _GameConnection>{};
+    });
     final previous = game[userId];
     if (previous != null) {
       unawaited(previous.socket.close(4000, 'replaced'));
@@ -420,6 +555,13 @@ final class _FakeGateway implements FakeGateway {
           );
           return;
         }
+        // A frame from a socket whose game was killed (or replaced) never
+        // reaches a successor under the same id.
+        if (!identical(_games[gameId], game) ||
+            !identical(game[userId], connection)) {
+          return;
+        }
+        if (!_push(gameId)) return;
         final handler = _options.onGameFrame;
         if (handler != null) {
           handler(connection, value);
@@ -428,19 +570,56 @@ final class _FakeGateway implements FakeGateway {
         }
       },
       onDone: () {
+        // A game the death rule removed is not this one's to touch: a new
+        // socket may already have started another under the same id.
+        if (!identical(_games[gameId], game)) return;
         if (identical(game[userId], connection)) {
           game.remove(userId);
-          if (game.isEmpty) _games.remove(gameId);
+          // The `leave` push counts toward the depth, and may kill the game.
+          _push(gameId);
+          if (identical(_games[gameId], game) && game.isEmpty) {
+            _games.remove(gameId);
+          }
         }
       },
       onError: (Object _) {},
     );
+    // The `enter` push; a stalled actor never answers it.
+    if (!_push(gameId)) return;
     connection.send(<String, Object?>{
       'type': 'welcome',
       'gameId': gameId,
       'userId': userId,
       'members': game.keys.toList(),
     });
+  }
+
+  /// One push onto [gameId]'s actor queue. `false` when the actor is stalled
+  /// (nothing reaches the game) or the push just killed the game.
+  bool _push(String gameId) {
+    final actor = _actors[gameId];
+    if (actor == null || !actor.stalled) return true;
+    final now = _now();
+    actor.depth++;
+    // Every queue passes through depth 1..20 first, so this is always set
+    // before the rule below reads it.
+    if (actor.depth <= 20) actor.lastHealthy = now;
+    final dead =
+        actor.depth > 200 ||
+        (actor.depth > 20 &&
+            now.difference(actor.lastHealthy!) > const Duration(seconds: 5));
+    if (dead) {
+      // The queue is deleted; the actor stays stalled, so a game started
+      // again under this id dies the same way.
+      actor
+        ..depth = 0
+        ..lastHealthy = null;
+      final members = _games.remove(gameId)?.values.toList() ?? const [];
+      for (final c in members) {
+        unawaited(c.socket.close(4001, 'actor-unavailable'));
+      }
+    }
+    return false;
   }
 
   // ---- lobby ---------------------------------------------------------------
@@ -480,12 +659,13 @@ final class _FakeGateway implements FakeGateway {
           .set('aoi', <String, Object?>{'maxPeers': _options.maxPeers})
           .build(),
     );
+    // Like the gateway: the retained position first (only with `pos` on),
+    // then the roster.
+    if (peer.zone != null && _capability('pos')) {
+      _enterZone(connection, peer, peer.zone!, announce: true);
+    }
     if (partyId != null) {
       _broadcastRoster(_parties[partyId]!);
-    }
-    // A retained position resumes the zone.
-    if (peer.zone != null) {
-      _enterZone(connection, peer, peer.zone!, announce: true);
     }
   }
 
@@ -515,6 +695,14 @@ final class _FakeGateway implements FakeGateway {
         _onSayOrEvent(c, value, isEvent: false);
       case 'event':
         _onSayOrEvent(c, value, isEvent: true);
+      case 'party.create' ||
+              'party.invite' ||
+              'party.accept' ||
+              'party.decline' ||
+              'party.leave' ||
+              'party.list'
+          when !_capability('party'):
+        _send(c, _error('capability_off', 'party is off'));
       case 'party.create':
         _onPartyCreate(c);
       case 'party.invite':
@@ -562,6 +750,13 @@ final class _FakeGateway implements FakeGateway {
       return;
     }
     final peer = _peers[c.userId]!;
+    final delta = _options.maxMoveDelta;
+    if (delta != null &&
+        peer.zone == zone &&
+        ((x - peer.x).abs() > delta || (y - peer.y).abs() > delta)) {
+      _send(c, _error('move_too_far', 'movement exceeds maxMoveDelta'));
+      return;
+    }
     peer
       ..x = x
       ..y = y
@@ -587,8 +782,11 @@ final class _FakeGateway implements FakeGateway {
       }, except: peer.userId);
     }
     peer.zone = zone;
-    peer.moved = false;
-    final inView = _peersInZone(zone).map((p) => p.toJson()).toList();
+    // Like the gateway's markDirty on entry: the next flush carries the
+    // entrant's position to the zone, the entrant included — which is how a
+    // client learns where a retained position put it.
+    peer.moved = true;
+    final inView = _viewOf(peer).map((p) => p.toJson()).toList();
     _send(c, <String, Object?>{
       'type': 'snapshot',
       'zone': zone,
@@ -614,8 +812,28 @@ final class _FakeGateway implements FakeGateway {
     // The position is retained for a reconnect (the zone stays set).
   }
 
-  Iterable<_Peer> _peersInZone(String zone) =>
-      _lobby.keys.map((u) => _peers[u]!).where((p) => p.zone == zone);
+  /// What `snapshot` shows [self]: the other live peers of its zone, the
+  /// `maxPeers` nearest (Chebyshev distance, then user id), by user id.
+  /// Later `enter`/`pos` frames are zone-wide: the fake has no view tracking.
+  List<_Peer> _viewOf(_Peer self) {
+    double dist(_Peer o) {
+      final dx = (o.x - self.x).abs();
+      final dy = (o.y - self.y).abs();
+      return dx > dy ? dx : dy;
+    }
+
+    final view =
+        _lobby.keys
+            .map((u) => _peers[u]!)
+            .where((p) => p.zone == self.zone && p.userId != self.userId)
+            .toList()
+          ..sort((a, b) {
+            final d = dist(a).compareTo(dist(b));
+            return d != 0 ? d : a.userId.compareTo(b.userId);
+          });
+    return (view.take(_options.maxPeers).toList()
+      ..sort((a, b) => a.userId.compareTo(b.userId)));
+  }
 
   void _flushPositions() {
     final byZone = <String, List<JsonObject>>{};
@@ -670,6 +888,14 @@ final class _FakeGateway implements FakeGateway {
       _send(c, _error('bad_message', 'name must be 1..64 bytes'));
       return;
     }
+    // The gateway measures the raw payload bytes; re-encoding is as close as
+    // a decoded frame gets.
+    if (isEvent &&
+        frame.containsKey('payload') &&
+        utf8.encode(Json.encode(frame['payload'])).length > 8 << 10) {
+      _send(c, _error('too_long', 'payload over 8 KB'));
+      return;
+    }
     final out = Json.object()
         .set('type', isEvent ? 'event' : 'say')
         .set('from', c.userId)
@@ -709,10 +935,6 @@ final class _FakeGateway implements FakeGateway {
   // ---- parties -------------------------------------------------------------
 
   void _onPartyCreate(_LobbyConnection c) {
-    if (!_capability('party')) {
-      _send(c, _error('capability_off', 'party is off'));
-      return;
-    }
     if (_partyOf.containsKey(c.userId)) {
       _send(c, _error('already_in_party', 'leave first'));
       return;
@@ -858,7 +1080,36 @@ final class _FakeGateway implements FakeGateway {
   };
 
   void _send(_LobbyConnection c, JsonObject frame) =>
-      _safeAdd(c.socket, Json.encode(frame));
+      _deliver(c, Json.encode(frame), droppable: false);
+
+  /// Every lobby frame leaves through here: the 32 KB cap, then the held
+  /// queue of [holdOutbound] with the gateway's drop policy — only a `pos`
+  /// batch is droppable.
+  void _deliver(_LobbyConnection c, String text, {required bool droppable}) {
+    final bytes = utf8.encode(text).length;
+    if (bytes > _maxOutboundBytes) {
+      text = _frameTooLarge(bytes);
+      droppable = false;
+    }
+    if (c.tooSlow) return;
+    final held = c.held;
+    if (held == null) {
+      _safeAdd(c.socket, text);
+      return;
+    }
+    if (held.length >= _outboundQueueDepth) {
+      final oldest = held.indexWhere((q) => q.droppable);
+      if (oldest < 0) {
+        c
+          ..held = null
+          ..tooSlow = true;
+        unawaited(c.socket.close(4005, 'too_slow'));
+        return;
+      }
+      held.removeAt(oldest);
+    }
+    held.add((text: text, droppable: droppable));
+  }
 
   void _sendTo(String userId, JsonObject frame) {
     final c = _lobby[userId];
@@ -867,10 +1118,11 @@ final class _FakeGateway implements FakeGateway {
 
   void _broadcastZone(String zone, JsonObject frame, {String? except}) {
     final text = Json.encode(frame);
-    for (final c in _lobby.values) {
+    final droppable = frame['type'] == 'pos';
+    for (final c in _lobby.values.toList()) {
       if (c.userId == except) continue;
       if (_peers[c.userId]?.zone != zone) continue;
-      _safeAdd(c.socket, text);
+      _deliver(c, text, droppable: droppable);
     }
   }
 }

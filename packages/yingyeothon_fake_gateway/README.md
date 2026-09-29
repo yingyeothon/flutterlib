@@ -8,8 +8,29 @@ chat and events by scope, parties with the gateway's `omitempty` marshalling,
 `ping`/`pong`, the documented refusal codes, and the close codes a test injects. The
 same listener serves the state stack's `/kv/*` routes over an in-memory store, so
 `yingyeothon_kvstore_client` and the example's key-value screen run offline too.
-**It is not the gateway** — no rate limiting, no area of interest, no persistence, no
-token verification — and it is `publish_to: none`.
+
+It also reproduces the failures a client must survive, each on request: the
+handshake statuses (`404` for a channel outside `channels`, `403` for a game or member
+outside `games`, and `410`/`429`/`502`/`503` through `refuseHandshakes`), the 32 KB
+outbound cap (`error frame_too_large` in place of the frame), the 256-frame outbound
+queue of a reader that stopped draining (`holdOutbound`: the oldest `pos` batch is
+dropped first, a queue of nothing but control frames closes with `4005`), an actor
+that stops consuming (`stallGame`: depth over 200, or over 20 for more than 5 s,
+closes every member with `4001`), `capability_off` for every `party.*` type, the
+8 KB event payload (`too_long`), `move_too_far` past `maxMoveDelta` (off unless set;
+the gateway's default is 3), and a snapshot of the `maxPeers` nearest others. Like
+the gateway it retains your position for the next socket and, with `pos` on,
+restores it before reading anything you send, then sends the snapshot before the
+party roster and flushes your own entry in the `pos` batch after every zone entry.
+A `q` disconnect pushes a `leave` that counts toward a stalled actor's depth.
+
+**It is not the gateway** — no rate limiting and no `4003`, no `aoi.range` box and no
+per-receiver view (`enter` and `pos` go to the whole zone; only the snapshot is
+capped at `maxPeers`), no `4002` idle close, no persistence beyond the process (a
+retained position and a party never expire), no token verification, and no `4001`
+handshake for a game still being aborted. Byte caps are measured on Dart's JSON,
+which does not escape `<`, `>` and `&` as Go does, so a frame full of them fits a
+little more. It is `publish_to: none`.
 
 A test (or the demo) owns both ends of the socket:
 
@@ -77,10 +98,11 @@ gw.kv.valueText('profile', 'settings', owner: 'alice'); // '{"volume":0.5}'
 ## Public API
 
 - `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `port`, `lobbyUsers`,
-  `gameMembers`, `received`, `closeUser`, `sendRaw`, `sendBinary`, `shutdown`).
+  `gameMembers`, `received`, `closeUser`, `sendRaw`, `sendBinary`,
+  `refuseHandshakes`, `stallGame`, `holdOutbound`, `releaseOutbound`, `shutdown`).
 - `FakeGatewayOptions` (`acceptedTokens`, `tick`, `capabilities`, `partySizeMax`,
-  `defaultZone`, `mapDocument`, `onGameFrame`, `maxPeers`, `kvCollections`),
-  `GameFrameHandler`, `GameSession`.
+  `defaultZone`, `mapDocument`, `onGameFrame`, `maxPeers`, `kvCollections`,
+  `channels`, `games`, `clock`, `maxMoveDelta`), `GameFrameHandler`, `GameSession`.
 - `FakeKvCollection` (`name`, `id`, `readScope`, `writeScope`, `encrypted`,
   `maxEntries`, `maxEntriesPerOwner`, `entries`, `ownerEntries`), `FakeKvStore`
   (`valueText`, `handles`, `handle`).

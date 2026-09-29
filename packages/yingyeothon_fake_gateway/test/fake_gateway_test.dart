@@ -36,8 +36,30 @@ final class RawClient {
   final Completer<void> _done = Completer<void>();
   late final StreamQueue _queue = StreamQueue(_frames.stream);
 
-  Future<JsonObject> next() async =>
+  /// The next frame that is not a `pos` batch: flushes run on their own
+  /// timer, so a test that is not about them must not depend on where one
+  /// lands.
+  Future<JsonObject> next() async {
+    while (true) {
+      final frame = await nextFrame();
+      if (frame['type'] != 'pos') return frame;
+    }
+  }
+
+  /// The next frame, whatever it is.
+  Future<JsonObject> nextFrame() async =>
       Json.decode(await _queue.next as String)! as JsonObject;
+
+  /// The next `pos` batch with an entry for [userId], and that entry.
+  Future<JsonObject> nextPosOf(String userId) async {
+    while (true) {
+      final frame = await nextFrame();
+      if (frame['type'] != 'pos') continue;
+      for (final p in frame['peers']! as List<Object?>) {
+        if ((p! as JsonObject)['userId'] == userId) return p as JsonObject;
+      }
+    }
+  }
 
   Future<void> get done => _done.future;
 
@@ -152,16 +174,20 @@ void main() {
     await b.next();
     a.send({'type': 'pos', 'zone': 'Z', 'x': 1, 'y': 2, 'dir': 'n'});
     final snapA = await a.next();
-    expect(snapA, {
-      'type': 'snapshot',
-      'zone': 'Z',
-      'peers': [
-        {'userId': 'a', 'x': 1.0, 'y': 2.0, 'dir': 'n'},
-      ],
+    // Like the gateway, a snapshot lists the others, never yourself; your
+    // own position comes in the next flush.
+    expect(snapA, {'type': 'snapshot', 'zone': 'Z', 'peers': <Object?>[]});
+    expect(await a.nextPosOf('a'), {
+      'userId': 'a',
+      'x': 1.0,
+      'y': 2.0,
+      'dir': 'n',
     });
     b.send({'type': 'pos', 'zone': 'Z', 'x': 0, 'y': 0});
     final snapB = await b.next();
-    expect((snapB['peers']! as List).length, 2);
+    expect(snapB['peers'], [
+      {'userId': 'a', 'x': 1.0, 'y': 2.0, 'dir': 'n'},
+    ]);
     expect(await a.next(), {
       'type': 'enter',
       'zone': 'Z',
@@ -170,12 +196,19 @@ void main() {
       'y': 0.0,
     });
     a.send({'type': 'pos', 'zone': 'Z', 'x': 5, 'y': 5});
-    final batch = await b.next();
-    expect(batch['type'], 'pos');
-    expect(batch['peers'], [
-      {'userId': 'a', 'x': 5.0, 'y': 5.0},
-    ]);
-    expect((await a.next())['type'], 'pos', reason: 'the mover is included');
+    Future<JsonObject> movedTo5(RawClient c) async {
+      while (true) {
+        final p = await c.nextPosOf('a');
+        if (p['x'] == 5.0) return p;
+      }
+    }
+
+    expect(await movedTo5(b), {'userId': 'a', 'x': 5.0, 'y': 5.0});
+    expect(await movedTo5(a), {
+      'userId': 'a',
+      'x': 5.0,
+      'y': 5.0,
+    }, reason: 'the mover is included');
     a.send({'type': 'pos', 'zone': 'Y', 'x': 0, 'y': 0});
     expect(await b.next(), {'type': 'leave', 'zone': 'Z', 'userId': 'a'});
     expect((await a.next())['zone'], 'Y');
@@ -419,10 +452,354 @@ void main() {
     final again = await RawClient.connect(gw, 'a');
     final hello = await again.next();
     expect(hello['partyId'], 'pty_1');
-    expect((await again.next())['type'], 'party');
     final snapshot = await again.next();
     expect(snapshot['type'], 'snapshot');
     expect(snapshot['zone'], 'Z');
+    expect((await again.next())['type'], 'party');
     await again.close();
+  });
+
+  group('fidelity', () {
+    Future<int> status(
+      FakeGateway g,
+      Map<String, String> query,
+      String token,
+    ) async {
+      try {
+        final socket = await WebSocket.connect(
+          g.wsUrl.replace(queryParameters: query).toString(),
+          protocols: <String>['bearer', token],
+        );
+        await socket.close(1000);
+        return 101;
+      } on WebSocketException catch (e) {
+        return e.httpStatusCode ?? -1;
+      }
+    }
+
+    test('handshake: unknown channel 404, game membership 403, injected '
+        'statuses before any check', () async {
+      final strict = await FakeGateway.start(
+        options: const FakeGatewayOptions(
+          channels: {'lobby_1', 'q_1'},
+          games: {
+            'g1': {'a'},
+          },
+        ),
+      );
+      addTearDown(strict.shutdown);
+      expect(await status(strict, {'channel': 'lobby_2'}, 'a'), 404);
+      // A missing bearer is 401 before the channel lookup's 404.
+      try {
+        await WebSocket.connect(
+          strict.wsUrl
+              .replace(queryParameters: {'channel': 'lobby_2'})
+              .toString(),
+        );
+        fail('connected without a bearer');
+      } on WebSocketException catch (e) {
+        expect(e.httpStatusCode, 401);
+      }
+      expect(await status(strict, {'channel': 'lobby_1'}, 'a'), 101);
+      // One code for an unknown game and for a non-member.
+      expect(
+        await status(strict, {'channel': 'q_1', 'gameId': 'g9'}, 'a'),
+        403,
+      );
+      expect(
+        await status(strict, {'channel': 'q_1', 'gameId': 'g1'}, 'b'),
+        403,
+      );
+      expect(
+        await status(strict, {'channel': 'q_1', 'gameId': 'g1'}, 'a'),
+        101,
+      );
+      strict.refuseHandshakes(410, count: 2);
+      expect(await status(strict, {'channel': 'lobby_1'}, 'a'), 410);
+      expect(await status(strict, {}, 'a'), 410, reason: 'before the 400');
+      expect(await status(strict, {'channel': 'lobby_1'}, 'a'), 101);
+      for (final code in <int>[429, 502, 503]) {
+        strict.refuseHandshakes(code);
+        expect(await status(strict, {'channel': 'lobby_1'}, 'a'), code);
+      }
+    });
+
+    test('every party type is refused when party is off', () async {
+      final off = await FakeGateway.start(
+        options: const FakeGatewayOptions(
+          capabilities: <String, Object?>{'pos': true, 'party': false},
+        ),
+      );
+      addTearDown(off.shutdown);
+      final a = await RawClient.connect(off, 'a');
+      await a.next();
+      for (final type in <String>[
+        'party.create',
+        'party.invite',
+        'party.accept',
+        'party.decline',
+        'party.leave',
+        'party.list',
+      ]) {
+        a.send({'type': type, 'userId': 'b', 'partyId': 'p'});
+        final refusal = await a.next();
+        expect(refusal['code'], 'capability_off', reason: type);
+      }
+      await a.close();
+    });
+
+    test('a snapshot shows the maxPeers nearest others, by user id', () async {
+      final few = await FakeGateway.start(
+        options: const FakeGatewayOptions(maxPeers: 2),
+      );
+      addTearDown(few.shutdown);
+      final others = <RawClient>[];
+      for (final (id, x) in <(String, int)>[
+        ('d', 9),
+        ('c', 1),
+        ('b', 1),
+        ('a', 5),
+      ]) {
+        final c = await RawClient.connect(few, id);
+        await c.next();
+        c.send({'type': 'pos', 'zone': 'Z', 'x': x, 'y': 0});
+        await c.next();
+        others.add(c);
+      }
+      final me = await RawClient.connect(few, 'me');
+      await me.next();
+      me.send({'type': 'pos', 'zone': 'Z', 'x': 0, 'y': 0});
+      final snapshot = await me.next();
+      // b and c tie at distance 1; a (5) and d (9) are cut.
+      expect(
+        (snapshot['peers']! as List<Object?>).map(
+          (p) => (p! as JsonObject)['userId'],
+        ),
+        ['b', 'c'],
+      );
+      for (final c in [...others, me]) {
+        await c.close();
+      }
+    });
+
+    test('maxMoveDelta holds inside a zone, from a retained position too; '
+        'a zone change is free', () async {
+      final strict = await FakeGateway.start(
+        options: const FakeGatewayOptions(maxMoveDelta: 3),
+      );
+      addTearDown(strict.shutdown);
+      final a = await RawClient.connect(strict, 'a');
+      await a.next();
+      a.send({'type': 'pos', 'zone': 'Z', 'x': 10, 'y': 10});
+      expect((await a.next())['type'], 'snapshot');
+      a.send({'type': 'pos', 'zone': 'Z', 'x': 13, 'y': 7});
+      a.send({'type': 'pos', 'zone': 'Z', 'x': 17, 'y': 7});
+      expect((await a.next())['code'], 'move_too_far');
+      await a.close();
+      // A new socket resumes (13, 7) in Z: a spawn at (0, 0) is refused.
+      final again = await RawClient.connect(strict, 'a');
+      await again.next();
+      expect((await again.next())['zone'], 'Z');
+      expect(await again.nextPosOf('a'), {'userId': 'a', 'x': 13.0, 'y': 7.0});
+      again.send({'type': 'pos', 'zone': 'Z', 'x': 0, 'y': 0});
+      expect((await again.next())['code'], 'move_too_far');
+      again.send({'type': 'pos', 'zone': 'Y', 'x': 0, 'y': 0});
+      expect((await again.next())['type'], 'snapshot');
+      await again.close();
+    });
+
+    test('an event payload is capped at 8 KB (too_long)', () async {
+      final a = await RawClient.connect(gw, 'a');
+      await a.next();
+      a.send({'type': 'pos', 'zone': 'Z', 'x': 0, 'y': 0});
+      await a.next();
+      // A JSON string of n characters encodes to n + 2 bytes.
+      a.send({
+        'type': 'event',
+        'scope': 'zone',
+        'name': 'n',
+        'payload': 'x' * 8190,
+      });
+      expect((await a.next())['type'], 'event');
+      a.send({
+        'type': 'event',
+        'scope': 'zone',
+        'name': 'n',
+        'payload': 'x' * 8191,
+      });
+      expect((await a.next())['code'], 'too_long');
+      await a.close();
+    });
+
+    test('an outbound frame over 32 KB becomes frame_too_large', () async {
+      final big = await FakeGateway.start(
+        options: FakeGatewayOptions(
+          // `{"type":"big","s":""}` is 21 bytes.
+          onGameFrame: (s, f) => s.send({
+            'type': 'big',
+            's': 'x' * ((f! as JsonObject)['n']! as int),
+          }),
+        ),
+      );
+      addTearDown(big.shutdown);
+      final a = await RawClient.connect(big, 'a', channel: 'q_1', gameId: 'g');
+      await a.next();
+      a.send({'type': 'give', 'n': 32768 - 21});
+      expect((await a.next())['type'], 'big');
+      a.send({'type': 'give', 'n': 32768 - 20});
+      final refusal = await a.next();
+      expect(refusal['type'], 'error');
+      expect(refusal['code'], 'frame_too_large');
+      await a.close();
+    });
+
+    test('a stalled actor dies past depth 200 with 4001', () async {
+      final a = await RawClient.connect(gw, 'a', channel: 'q_1', gameId: 'g');
+      await a.next();
+      gw.stallGame('g');
+      for (var i = 0; i < 200; i++) {
+        a.send({'type': 'tick'});
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(gw.gameMembers, {
+        'g': {'a'},
+      });
+      a.send({'type': 'tick'});
+      await a.done.timeout(const Duration(seconds: 5));
+      expect(a.socket.closeCode, 4001);
+      expect(gw.gameMembers, isEmpty);
+    });
+
+    test(
+      'a leave counts toward the depth; a restarted game dies again',
+      () async {
+        final a = await RawClient.connect(gw, 'a', channel: 'q_1', gameId: 'g');
+        final b = await RawClient.connect(gw, 'b', channel: 'q_1', gameId: 'g');
+        await a.next();
+        await b.next();
+        gw.stallGame('g');
+        for (var i = 0; i < 200; i++) {
+          a.send({'type': 'tick'});
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(gw.gameMembers['g'], {'a', 'b'});
+        // b's leave is push 201.
+        await b.close();
+        await a.done.timeout(const Duration(seconds: 5));
+        expect(a.socket.closeCode, 4001);
+        expect(gw.gameMembers, isEmpty);
+
+        // The same id starts a new game on a fresh queue; the actor is still
+        // dead, so it takes 201 more pushes (the enter is one) to abort.
+        final again = await RawClient.connect(
+          gw,
+          'a',
+          channel: 'q_1',
+          gameId: 'g',
+        );
+        for (var i = 0; i < 199; i++) {
+          again.send({'type': 'tick'});
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(gw.gameMembers['g'], {'a'});
+        again.send({'type': 'tick'});
+        again.send({'type': 'tick'});
+        await again.done.timeout(const Duration(seconds: 5));
+        expect(again.socket.closeCode, 4001);
+      },
+    );
+
+    test('a stalled actor dies over depth 20 after more than 5 s', () async {
+      var now = DateTime.utc(2026);
+      final clocked = await FakeGateway.start(
+        options: FakeGatewayOptions(clock: () => now),
+      );
+      addTearDown(clocked.shutdown);
+      final a = await RawClient.connect(
+        clocked,
+        'a',
+        channel: 'q_1',
+        gameId: 'g',
+      );
+      await a.next();
+      clocked.stallGame('g');
+      for (var i = 0; i < 21; i++) {
+        a.send({'type': 'tick'});
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      now = now.add(const Duration(seconds: 5));
+      a.send({'type': 'tick'});
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(clocked.gameMembers, contains('g'), reason: '5 s is not more');
+      now = now.add(const Duration(milliseconds: 1));
+      a.send({'type': 'tick'});
+      await a.done.timeout(const Duration(seconds: 5));
+      expect(a.socket.closeCode, 4001);
+    });
+
+    test(
+      'a held reader loses pos batches first, then closes with 4005',
+      () async {
+        // A slow tick, so each flush lands where the test puts it.
+        final slow = await FakeGateway.start(
+          options: const FakeGatewayOptions(tick: 200),
+        );
+        addTearDown(slow.shutdown);
+        final a = await RawClient.connect(slow, 'a');
+        final b = await RawClient.connect(slow, 'b');
+        await a.next();
+        await b.next();
+        a.send({'type': 'pos', 'zone': 'Z', 'x': 0, 'y': 0});
+        await a.next();
+        b.send({'type': 'pos', 'zone': 'Z', 'x': 1, 'y': 0});
+        await b.next();
+        expect((await a.next())['type'], 'enter');
+        // The entry flushes land; a pong then drains a's socket.
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        a.send({'type': 'ping'});
+        while ((await a.nextFrame())['type'] != 'pong') {}
+
+        Future<List<JsonObject>> heldRound(double x, int says) async {
+          slow.holdOutbound('a');
+          b.send({'type': 'pos', 'zone': 'Z', 'x': x, 'y': 0});
+          // One flush puts a `pos` batch in a's queue.
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          for (var i = 0; i < says; i++) {
+            b.send({'type': 'say', 'scope': 'zone', 'text': 's$i'});
+          }
+          b.send({'type': 'ping'});
+          while ((await b.nextFrame())['type'] != 'pong') {}
+          slow.releaseOutbound('a');
+          return <JsonObject>[
+            for (var i = 0; i < 256; i++) await a.nextFrame(),
+          ];
+        }
+
+        // Room for all: the batch is kept, first, in order.
+        final roomy = await heldRound(2, 255);
+        expect(roomy.first['type'], 'pos');
+        expect((roomy.first['peers']! as List<Object?>).single, {
+          'userId': 'b',
+          'x': 2.0,
+          'y': 0.0,
+        });
+        expect(roomy.skip(1).map((f) => f['type']).toSet(), {'say'});
+        // One frame too many: the batch, the only droppable, goes.
+        final full = await heldRound(3, 256);
+        expect(full.map((f) => f['type']).toSet(), {
+          'say',
+        }, reason: 'the pos batch was dropped to make room');
+        expect(full.first['text'], 's0');
+        expect(full.last['text'], 's255');
+
+        slow.holdOutbound('a');
+        for (var i = 0; i < 257; i++) {
+          b.send({'type': 'say', 'scope': 'zone', 'text': 't$i'});
+        }
+        await a.done.timeout(const Duration(seconds: 5));
+        expect(a.socket.closeCode, 4005);
+        await b.close();
+      },
+    );
   });
 }

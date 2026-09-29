@@ -6,10 +6,12 @@
 /// events by scope, parties with the gateway's `omitempty` marshalling,
 /// `ping`/`pong`, the documented refusal codes, and the close codes a test
 /// injects, plus the state stack's `/kv/*` routes over an in-memory store
-/// for the key-value client. It is not the gateway: no rate limiting, no area of interest,
-/// no persistence, no real token verification — a token is accepted as an
-/// identity, and its user id is the JWT `sub` when it parses as one or the
-/// token text itself otherwise.
+/// for the key-value client, and on request the failures a client must
+/// survive (see the README). It is not the gateway: no rate limiting, no
+/// `aoi.range` box or per-receiver view, no persistence beyond the process,
+/// no real token verification — a token is accepted as an identity, and its
+/// user id is the JWT `sub` when it parses as one or the token text itself
+/// otherwise.
 ///
 /// Never publish this package; it is `publish_to: none`.
 library;
