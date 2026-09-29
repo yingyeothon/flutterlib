@@ -23,10 +23,8 @@ flowchart TD
   close before open, so a dead token ends in `stopped` after `maxHandshakeFailures`,
   not in an error you can read. `verify()` from `yingyeothon_auth_client` is the way to
   tell them apart.
-- **Web:** the redirect sign-in lands on your page; read `Uri.base` (the fragment is
-  there), call `parseRedirect`, then replace the history entry so the fragment is gone.
-- **Android / iOS:** the redirect arrives as a deep link (`app_links` or the platform
-  API). Register the URL on the channel's allowlist first.
+- **Sign-in redirect:** how the browser's return reaches your app differs per
+  platform — [Authentication › Receiving the redirect](authentication.md#receiving-the-redirect).
 
 ## Key-value store
 

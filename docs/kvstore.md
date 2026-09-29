@@ -22,6 +22,15 @@ through the API:
 `400` with `reason` `wrong_namespace`, and `collection.info()` tells you which one
 applies before you guess.
 
+The same host also serves a per-player document store (`/s/{ownerId}`, one blob per
+player; every `PUT` is conditional and writes take the auth channel's doc apiKey from
+the console, so a player can only read its own row, with a plain `GET` and its
+Bearer token). This library has no client for it and will not. For state a player
+writes itself, use a `user`-scoped collection — their own entries, versioned, with
+`ifMatch` for a compare-and-set; **a player-writable collection is not the place for
+state the server must vouch for** (currency, inventory), which a game server writes
+to `/s/*` directly.
+
 ## The two cases
 
 ```dart

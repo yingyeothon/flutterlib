@@ -19,8 +19,9 @@ flutter run -d linux
 
 `flutter create .` adds `linux/` (or `android/`, `ios/`, `macos/`, `windows/`, `web/`)
 and touches nothing that is committed: `lib/`, `test/`, `pubspec.yaml`, `README.md`,
-`analysis_options.yaml`. The offline demo is not available on web (the fake gateway
-needs `dart:io`); everything else is.
+`analysis_options.yaml` (the web one would add `web/**` to the analyzer excludes,
+which is why that line is already there). The offline demo is not available on web
+(the fake gateway needs `dart:io`); everything else is.
 
 ## Configure
 
@@ -44,7 +45,9 @@ Sign in with **GitHub** or **Google**: the app opens the browser with the redire
 URL from the login screen (default `http://localhost/signin`, **which must be on the
 auth channel's allowlist**); a desktop build has no deep link, so the browser lands
 on a connection-refused page whose address bar holds the fragment — paste that URL
-back into the app. Or paste a JWT you obtained elsewhere.
+back into the app. That is the intended desktop path, not a workaround
+([Authentication](../../docs/authentication.md#receiving-the-redirect)). Or paste a
+JWT you obtained elsewhere.
 
 ## The map
 

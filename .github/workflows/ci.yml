@@ -37,7 +37,8 @@ jobs:
         run: dart run tool/bin/check_docs.dart
 
   # The Flutter half: the example compiles, its widget tests pass, and the
-  # platform folder injection the README teaches produces a Linux build.
+  # platform folder injection the README teaches produces a Linux and a web
+  # build.
   example:
     runs-on: ubuntu-latest
     steps:
@@ -59,6 +60,16 @@ jobs:
           flutter create . --platforms=linux --project-name yyt_playground --org life.yyt
           test -z "$(git status --porcelain .)" || { echo "flutter create changed tracked files:"; git status --porcelain .; exit 1; }
           flutter build linux --debug
+      # A browser sends no custom WebSocket header, so on web the subprotocol is
+      # the only way the token travels. The build proves the example still
+      # builds for web; the fake gateway and the offline demo stay behind a
+      # conditional import, since dart:io fails there at run time.
+      - name: Inject the web folder and build for web
+        run: |
+          cd examples/playground
+          flutter create . --platforms=web --project-name yyt_playground --org life.yyt
+          test -z "$(git status --porcelain .)" || { echo "flutter create changed tracked files:"; git status --porcelain .; exit 1; }
+          flutter build web
 
   # This repository is public. The local hooks catch a leak before it is
   # committed, but only on a machine that installed them, so the same scan runs

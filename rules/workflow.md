@@ -105,10 +105,12 @@ tool/gate.sh
 It runs, in order: hook install, `dart pub get`, `dart format --set-exit-if-changed`,
 `dart analyze --fatal-infos packages tool`, `dart test` in every member (integration
 tag included), `check_coverage`, `check_docs`, and `flutter pub get / analyze / test`
-for every example. `pre-push` runs exactly this. CI runs the same steps and two more
-the gate cannot afford locally: `flutter create . --platforms=linux …` in the
-example (which must change no tracked file) and `flutter build linux --debug`. A
-push is done when CI is green; check it (`gh run list --limit 3`).
+for every example. `pre-push` runs exactly this. CI runs the same steps and two
+more the gate cannot afford locally, in the example: `flutter create .
+--platforms=linux …` then `flutter build linux --debug`, and `flutter create .
+--platforms=web …` then `flutter build web`. After each `create`, `git status
+--porcelain .` must be empty ([flutter.md](flutter.md) says why that needs the
+analyzer excludes). A push is done when CI is green; check it (`gh run list --limit 3`).
 
 **A gate that was already red before your change is a separate task.** Confirm with
 `git stash -u && tool/gate.sh; git stash pop` (`-u` takes the untracked files too, or
@@ -126,3 +128,10 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
   this SDK follows it — never the other way round.
 - The example is one app (`playground`) that exercises every package; a second
   example needs a purpose the first cannot carry.
+- No package receives the auth redirect (owner decision, 2026-09-29): it is platform
+  glue, `docs/authentication.md` says how per platform, and on Linux and Windows
+  copy-paste is the permanent path, not a gap.
+- No client for the per-player document store (`/s/{ownerId}`; owner decision,
+  2026-09-29). Its writes are apiKey-only, so a player could only read its own row.
+  State a player writes itself goes in a `user`-scoped kv collection (versions,
+  `ifMatch`), and a game server talks to `/s/*` directly. `docs/kvstore.md` says so.

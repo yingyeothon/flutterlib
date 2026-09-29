@@ -52,7 +52,11 @@ The libraries are engine-free; this file is about the app around them.
   --project-name yyt_playground --org life.yyt` injects them and never overwrites
   `lib/`, `test/`, `pubspec.yaml`, `README.md` or `analysis_options.yaml`. It *does*
   create `test/widget_test.dart` when absent (the counter test, which fails here), so
-  a real test keeps that name.
+  a real test keeps that name. `--platforms=web` does touch one tracked file: it adds
+  `web/**` to the analyzer excludes in `analysis_options.yaml` (checked 2026-09-29,
+  Flutter 3.47), so that line is committed — without it CI's clean-tree check after
+  the web `create` fails. A new platform gets the same check: run its `create`,
+  then `git status --porcelain .`.
 - Configuration is `--dart-define=YYT_*` first, then the login screen (memory only,
   never persisted). Nothing in the example stores a token.
 - Numbers on the wire are `double`; pass `x.toDouble()` from an `int` slider.

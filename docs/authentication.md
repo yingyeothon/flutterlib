@@ -43,8 +43,8 @@ final start = auth.buildStartUrl(
   redirect: Uri.parse('https://game.example/signin'),
   nonce: nonce,
 );
-// open `start` (url_launcher); receive `returned` (app_links, a loopback server, or
-// window.location on web)
+// open `start` (url_launcher); receive `returned` (app_links, Uri.base on web, or
+// the address bar pasted back on desktop) — see "Receiving the redirect" below
 final token = auth.parseRedirect(returned, expectedNonce: nonce);
 ```
 
@@ -57,6 +57,57 @@ Two things a client must get right, and `parseRedirect` does both:
 
 `redirect` must be on the channel's allowlist — matched on origin and path prefix, so
 the nonce query is admitted — or the request is refused with `403`.
+
+### Receiving the redirect
+
+The SDK builds the URL and reads the result; **receiving the browser's return is your
+app's job**, by design: it is platform glue, and each platform does it differently.
+No package here will do it for you. **The token is in the fragment, and a fragment
+never reaches a server** — only script in the page, or the app a link opens, sees it.
+
+| Platform | How the URL comes back | `redirect` on the allowlist |
+| --- | --- | --- |
+| Android, iOS, macOS | a *verified* app link / universal link — an `https` URL your app claims (`assetlinks.json` with `autoVerify`; Associated Domains with `apple-app-site-association`) — through a package such as `app_links`: its initial link after a cold start, its stream otherwise | that URL |
+| Web | the browser comes back to your page, which starts your app afresh: read `Uri.base` **before `runApp`**, then strip the fragment from the history entry | your page |
+| Linux, Windows | the player copies the browser's address bar back into the app | a `localhost` path nothing serves |
+
+A `redirect` must be `https`, or `http` only for `localhost`, `127.0.0.1` and `[::1]`,
+so a custom scheme (`mygame://`) is refused; `services/auth/src/redirect.ts` in the
+`service` repository has the whole rule, and the allowlist matches the exact origin,
+port included. `/start` is a browser route: a refusal there is an error page in the
+browser, not a status your app can read, and `/callback` refuses a sign-in finished in
+another browser than the one that started it (a provider's own app intercepting the
+page, say).
+
+- **Keep the nonce across the trip.** On web the return reloads the app — open the
+  start URL in the same tab (`webOnlyWindowName: '_self'`) — and a phone may kill the
+  app while the browser is in front. Store the nonce before opening the URL
+  (`sessionStorage` on web, the app's private storage on a phone), pass it to
+  `parseRedirect`, then delete it. Only desktop copy-paste can keep it in memory, as
+  the playground does.
+- **On web, take the fragment before anything else sees it.** With the default hash
+  URL strategy the fragment becomes the initial route name, and a `routes:` map that
+  does not know it reports the route name — the token — in a debug message; a
+  crash reporter or analytics SDK records `location.href`, fragment included. So read
+  `Uri.base`, call `parseRedirect`, then `window.history.replaceState` (package:web)
+  with the path alone, and only then initialise those and call `runApp`; or use the
+  path URL strategy.
+- **An app link that does not open the app opens your web page.** If verification
+  failed or the player opted out, the `https` URL loads your site with the token in
+  the fragment: serve a page there with no third-party script, which strips it. An
+  unverified link can be offered to another app, so verify it.
+- **Copy-paste leaves the URL in the browser's history** — and in any history sync —
+  for up to `tokenTtlSec`, with no revocation. Whatever serves that `localhost` port
+  receives the nonce and could read the fragment, so pick a path and port nothing on
+  the machine serves. A loopback listener instead of copy-paste cannot read the
+  fragment itself: it has to serve a page whose script reads `location.hash`, removes
+  it and posts it back; bind `127.0.0.1` only, accept once, close it, and fall back to
+  copy-paste if the port is taken — another process there would get the token.
+
+Whatever receives it, pass the returned URL to `parseRedirect` — pasted text through
+`Uri.tryParse`, since a `FormatException` would quote the credential — and drop it:
+never log it or show it. The
+[playground](../examples/playground/README.md#configure) walks the desktop path.
 
 ## Exchanging a provider credential
 
