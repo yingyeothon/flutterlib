@@ -10,7 +10,7 @@ class OfflineDemo {
 
   String get kvUrl => '';
 
-  Future<void> seedPeers(String zone, {int count = 3}) async {}
+  Future<bool> seedPeers(String zone, {int count = 3}) async => false;
 
   Future<void> closeUser(String userId, int code) async {}
 

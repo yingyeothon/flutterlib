@@ -72,11 +72,15 @@ class _DungeonScreenState extends State<DungeonScreen> {
     try {
       final frame = Json.decode(_frame.text);
       if (frame is! Map<String, Object?>) {
-        throw StateError('frame must be an object');
+        throw const FormatException('frame must be an object');
       }
       game.send(frame);
     } on Exception catch (e) {
+      // FormatException from the input, or GatewayClientException.
       setState(() => _error = e.toString());
+    } on StateError catch (e) {
+      // Not connected.
+      setState(() => _error = e.message);
     }
   }
 

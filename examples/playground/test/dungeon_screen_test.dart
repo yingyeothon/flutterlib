@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yingyeothon_auth_client/yingyeothon_auth_client.dart';
 import 'package:yingyeothon_fake_gateway/yingyeothon_fake_gateway.dart';
+import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 import 'package:yyt_playground/config.dart';
 import 'package:yyt_playground/main.dart';
 import 'package:yyt_playground/screens/dungeon_screen.dart';
@@ -64,6 +65,35 @@ void main() {
     await tester.tap(find.byKey(const Key('q-send')));
     await pumpUntil(tester, () => session.gameFrames.length == 2);
     expect(find.textContaining('"type":"echo"'), findsOneWidget);
+  });
+
+  testWidgets('a reserved type and a non-object are refused in place', (
+    tester,
+  ) async {
+    await openAndConnect(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'frame (JSON)'),
+      '{"type":"enter"}',
+    );
+    await tester.tap(find.byKey(const Key('q-send')));
+    await tester.pump();
+    expect(
+      find.text(
+        'GatewayClientException(reserved_type): enter is set by the gateway',
+      ),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'frame (JSON)'),
+      '[1]',
+    );
+    await tester.tap(find.byKey(const Key('q-send')));
+    await tester.pump();
+    expect(
+      find.text('FormatException: frame must be an object'),
+      findsOneWidget,
+    );
+    expect(session.game!.state, GatewayClientState.connected);
   });
 
   testWidgets('4001 shows the Aborted banner', (tester) async {

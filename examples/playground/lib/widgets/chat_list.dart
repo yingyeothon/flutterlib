@@ -33,13 +33,18 @@ class _ChatListState extends State<ChatList> {
       action();
       setState(() => _error = null);
     } on Exception catch (e) {
+      // GatewayClientException (the channel has that feature off), or this
+      // screen's own input check.
       setState(() => _error = e.toString());
+    } on StateError catch (e) {
+      // Not connected.
+      setState(() => _error = e.message);
     }
   }
 
   void _requireTo() {
     if (_scope == SayScope.user && _to.text.trim().isEmpty) {
-      throw StateError('a whisper needs a user id in "to"');
+      throw const FormatException('a whisper needs a user id in "to"');
     }
   }
 

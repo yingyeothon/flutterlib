@@ -1,16 +1,28 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 
-/// A 20×20 grid: you in one colour, peers in another, facing as a tick.
-class ZoneMap extends StatelessWidget {
-  const ZoneMap({super.key, required this.self, required this.peers});
+import '../map_layout.dart';
 
+/// The fetched map's grid: blocked cells filled, you in one colour, peers in
+/// another, facing as a tick.
+class ZoneMap extends StatelessWidget {
+  const ZoneMap({
+    super.key,
+    required this.layout,
+    required this.self,
+    required this.peers,
+  });
+
+  final MapLayout layout;
   final Peer self;
   final List<Peer> peers;
 
   @override
   Widget build(BuildContext context) => CustomPaint(
     painter: _ZonePainter(
+      layout: layout,
       self: self,
       peers: peers,
       selfColor: Theme.of(context).colorScheme.primary,
@@ -23,6 +35,7 @@ class ZoneMap extends StatelessWidget {
 
 class _ZonePainter extends CustomPainter {
   _ZonePainter({
+    required this.layout,
     required this.self,
     required this.peers,
     required this.selfColor,
@@ -30,31 +43,30 @@ class _ZonePainter extends CustomPainter {
     required this.gridColor,
   });
 
+  final MapLayout layout;
   final Peer self;
   final List<Peer> peers;
   final Color selfColor;
   final Color peerColor;
   final Color gridColor;
 
-  static const int cells = 20;
-
   @override
   void paint(Canvas canvas, Size size) {
-    final cell = size.shortestSide / cells;
+    final w = layout.width;
+    final h = layout.height;
+    final cell = math.min(size.width / w, size.height / h);
     final grid = Paint()
       ..color = gridColor
       ..strokeWidth = 0.5;
-    for (var i = 0; i <= cells; i++) {
-      canvas.drawLine(
-        Offset(i * cell, 0),
-        Offset(i * cell, cells * cell),
-        grid,
-      );
-      canvas.drawLine(
-        Offset(0, i * cell),
-        Offset(cells * cell, i * cell),
-        grid,
-      );
+    for (var i = 0; i <= w; i++) {
+      canvas.drawLine(Offset(i * cell, 0), Offset(i * cell, h * cell), grid);
+    }
+    for (var i = 0; i <= h; i++) {
+      canvas.drawLine(Offset(0, i * cell), Offset(w * cell, i * cell), grid);
+    }
+    final wall = Paint()..color = gridColor;
+    for (final (x, y) in layout.blocked) {
+      canvas.drawRect(Rect.fromLTWH(x * cell, y * cell, cell, cell), wall);
     }
     for (final peer in peers) {
       _draw(canvas, peer, cell, peerColor);
@@ -93,5 +105,5 @@ class _ZonePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ZonePainter old) =>
-      old.self != self || old.peers != peers;
+      old.layout != layout || old.self != self || old.peers != peers;
 }

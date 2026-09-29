@@ -67,8 +67,11 @@ Future<void> seedPeers(Session session) async {
   final demo = _demo(session);
   final zone = session.lobby?.peers.zone ?? session.lobby?.hello?.zone;
   if (demo == null || zone == null) return;
-  await demo.seedPeers(zone);
-  session.note('seeded 3 peers into $zone');
+  if (await demo.seedPeers(zone)) {
+    session.note('seeded 3 peers into $zone');
+  } else {
+    session.note('peers already seeded');
+  }
 }
 
 /// Asks the fake to close the lobby socket with [code].

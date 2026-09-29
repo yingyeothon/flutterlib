@@ -29,7 +29,11 @@ class _PartyPanelState extends State<PartyPanel> {
       action();
       setState(() => _error = null);
     } on Exception catch (e) {
+      // GatewayClientException: the channel has that feature off.
       setState(() => _error = e.toString());
+    } on StateError catch (e) {
+      // Not connected.
+      setState(() => _error = e.message);
     }
   }
 

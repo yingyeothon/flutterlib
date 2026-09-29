@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 
 import '../debug/debug_hooks.dart';
+import '../map_layout.dart';
 import '../session.dart';
 import '../widgets/chat_list.dart';
 import '../widgets/close_banner.dart';
@@ -24,17 +25,12 @@ class LobbyScreen extends StatefulWidget {
 
 class _LobbyScreenState extends State<LobbyScreen> {
   String? _connectError;
-  double _x = 5;
-  double _y = 5;
-  String _dir = 'n';
-  late String _zone;
 
   Session get session => widget.session;
 
   @override
   void initState() {
     super.initState();
-    _zone = '';
     // After the first frame, so the session's notifications do not land
     // while this screen's route is still building. Not awaited on purpose:
     // the screen renders the connecting state, and the error is shown in
@@ -44,10 +40,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
       session
           .connectLobby()
           .then((hello) {
-            if (!mounted) return;
-            setState(() => _zone = hello.zone);
-            session.lobby?.pos(zone: hello.zone, x: _x, y: _y, dir: _dir);
-            if (offlineAutostart) seedPeers(session);
+            // The session announced the position on `connected`.
+            if (mounted && offlineAutostart) seedPeers(session);
           })
           .catchError((Object e) {
             if (mounted) setState(() => _connectError = e.toString());
@@ -62,24 +56,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
     super.dispose();
   }
 
-  void _move(double dx, double dy, String dir) {
-    final lobby = session.lobby;
-    if (lobby == null || lobby.state != GatewayClientState.connected) return;
-    setState(() {
-      _x = (_x + dx).clamp(0, 19);
-      _y = (_y + dy).clamp(0, 19);
-      _dir = dir;
-    });
-    lobby.pos(zone: _zone, x: _x, y: _y, dir: _dir);
-  }
-
-  void _changeZone(String zone) {
-    final lobby = session.lobby;
-    if (lobby == null || lobby.state != GatewayClientState.connected) return;
-    setState(() => _zone = zone);
-    lobby.pos(zone: zone, x: _x, y: _y, dir: _dir);
-  }
-
   @override
   Widget build(BuildContext context) => DefaultTabController(
     length: 3,
@@ -89,7 +65,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           listenable: session,
           builder: (context, _) => Text(
             'Lobby · ${session.lobby?.state.name ?? 'idle'}'
-            '${_zone.isEmpty ? '' : ' · $_zone'}',
+            '${session.position == null ? '' : ' · ${session.position!.zone}'}',
           ),
         ),
         actions: <Widget>[
@@ -139,12 +115,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   children: <Widget>[
                     _ZoneTab(
                       lobby: lobby,
-                      x: _x,
-                      y: _y,
-                      dir: _dir,
-                      zone: _zone,
-                      onMove: _move,
-                      onZone: _changeZone,
+                      layout: session.mapLayout,
+                      position: session.position,
+                      onMove: session.move,
+                      onZone: session.changeZone,
                     ),
                     ChatList(session: session),
                     PartyPanel(session: session),
@@ -163,19 +137,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
 class _ZoneTab extends StatelessWidget {
   const _ZoneTab({
     required this.lobby,
-    required this.x,
-    required this.y,
-    required this.dir,
-    required this.zone,
+    required this.layout,
+    required this.position,
     required this.onMove,
     required this.onZone,
   });
 
   final GatewayLobbyClient? lobby;
-  final double x;
-  final double y;
-  final String dir;
-  final String zone;
+  final MapLayout layout;
+  final PlayerPosition? position;
   final void Function(double dx, double dy, String dir) onMove;
   final void Function(String zone) onZone;
 
@@ -183,12 +153,40 @@ class _ZoneTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final peers = lobby?.peers.all() ?? const <Peer>[];
     final hello = lobby?.hello;
+    final at = position;
     return Column(
       children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              Text(
+                'Map ${layout.name} · ${layout.width}×${layout.height}',
+                key: const Key('map-caption'),
+              ),
+              // Zones are distinct after MapLayout.parse, so the keys are too.
+              for (final z in layout.zones)
+                ChoiceChip(
+                  key: Key('zone-chip-$z'),
+                  label: Text(z),
+                  selected: z == at?.zone,
+                  onSelected: at == null ? null : (_) => onZone(z),
+                ),
+            ],
+          ),
+        ),
         Expanded(
           child: ZoneMap(
             key: const Key('zone-map'),
-            self: Peer(userId: hello?.userId ?? 'you', x: x, y: y, dir: dir),
+            layout: layout,
+            self: Peer(
+              userId: hello?.userId ?? 'you',
+              x: at?.x ?? Session.spawnX,
+              y: at?.y ?? Session.spawnY,
+              dir: at?.dir,
+            ),
             peers: peers,
           ),
         ),
@@ -219,14 +217,12 @@ class _ZoneTab extends StatelessWidget {
                 icon: const Icon(Icons.arrow_right),
               ),
               Text('${peers.length} peer(s) in view'),
-              if (hello != null)
+              if (at != null)
                 SizedBox(
                   width: 160,
                   child: TextField(
                     key: const Key('zone-field'),
-                    controller: TextEditingController(
-                      text: zone.isEmpty ? hello.zone : zone,
-                    ),
+                    controller: TextEditingController(text: at.zone),
                     decoration: const InputDecoration(
                       labelText: 'zone (submit to move)',
                     ),
