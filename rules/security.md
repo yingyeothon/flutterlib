@@ -148,6 +148,14 @@
 
 ## Trusting the wire
 
+- A string off the wire that the app both shows and sends back — a zone from the map
+  document, say — is kept exactly or dropped, **never rewritten**: a truncated zone
+  is a zone the map never named, and a lone surrogate re-encodes as U+FFFD. Before
+  showing one, refuse C0/C1 controls, format and bidi characters, zero-width and
+  invisible characters, U+2028/2029 and lone surrogates; `MapLayout._isLabel` in
+  `examples/playground/lib/map_layout.dart` is the reference list.
+  `Normalize.diagnostic` replaces C0/DEL with `?` and truncates — it is for log
+  lines, never for a value that is sent back.
 - `enter` and `leave` are the gateway's own bookkeeping on `q`; the client refuses to
   send them locally. Removing that check is a regression, not a simplification.
 - Capability checks in this SDK are a courtesy that gives a fast local error; the

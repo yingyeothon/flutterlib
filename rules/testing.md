@@ -32,8 +32,17 @@
   also stalls headers or a body to drive the timeout). Never a real host.
 - `flutter_test` replaces every `HttpClient` with one that answers an empty `400`;
   a widget test that talks HTTP to the fake gateway sets `HttpOverrides.global =
-  null` in `setUp` (each test file is its own isolate). WebSocket tests are not
-  affected, which is why the lobby tests never needed it.
+  null` (each test file is its own isolate). In a file whose other tests rely on
+  the stub `400` — a failed map fetch leaves no timer — set it in the one test that
+  needs real HTTP and restore it with `addTearDown`, as `lobby_screen_test.dart`
+  does. WebSocket tests are not affected. If such a test then fails with a pending
+  timer, that is the pooled connection's 15 s idle timer: end the test with
+  `tester.pump(const Duration(seconds: 16))`.
+- Inside a `testWidgets` body, real I/O — starting or shutting down a
+  `FakeGateway`, a raw `WebSocket` — is awaited inside `tester.runAsync`; awaited
+  on the test clock it never completes and the run just hangs, naming no test.
+  `setUp` and `tearDown` run on real time and need no wrapper. Bisect a hang with
+  `timeout 90 flutter test <file> --plain-name '<name>'`.
 - Logging: `CapturingLogWriter` (`gamebase_client/test/support/harness.dart`; the
   logger suite has its own copy) records `LogWriters.format` output, so a test
   asserts whole lines.
@@ -48,6 +57,11 @@
   'disconnected:4002:true', 'reconnecting:1:500', ...])`, not counts.
 - **Pin wire bytes.** A sender test compares `sentRaw` to the exact JSON string; a
   round-trip proves nothing about what the gateway sees.
+- **A timer an operation arms is cancelled when the operation settles.** A
+  `Future.delayed` raced with `Future.any` never is; use `.timeout(...)`
+  (`architecture.md`) or a `Timer` + `Completer` cancelled in `finally`, and pin it
+  with `fakeAsync`: `expect(async.pendingTimers, isEmpty)` after a success *and*
+  after a failure. The map fetcher's 30 s deadline once outlived every fetch.
 - **A negative assertion needs a positive control.** "The token is not in the log" is
   meaningless if the log is empty: assert the expected line exists first. The codec
   keeps a test that `dart:convert` *does* quote the input, so the wrapper's reason for
@@ -70,6 +84,14 @@
   and take `closeCode` there (`ScriptedServer.closedCode`).
 - Give every await in an integration test a timeout (`soon()`), so a hang is a
   failure with a name rather than a 30-second silence.
+- The fake gateway flushes `pos` batches on its own timer, so `RawClient.next()` in
+  its suite skips them; assert a batch with `nextPosOf(userId)`, and give a test
+  about flush timing a slow `tick` plus a `ping`/`pong` drain before the step it
+  measures. Its failure modes are off unless a test asks: options (`channels`,
+  `games`, `acceptedTokens`, `maxMoveDelta`) or calls (`refuseHandshakes`,
+  `stallGame`, `holdOutbound`). Keep a new one off by default, so the other suites
+  do not change, and list it in the fake README's paragraph that begins "It also
+  reproduces the failures".
 - The fake gateway's tests drive it with raw `dart:io` sockets, and its `/kv/*` routes
   with a raw `HttpClient`, so the fake is tested against the protocol, not against
   the SDK it exists to test.

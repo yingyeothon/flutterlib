@@ -17,13 +17,20 @@ flutter run -d linux
 Then **Offline demo** on the login screen. It starts `yingyeothon_fake_gateway` in
 process and connects the SDK to it over the real transport. Walk the change:
 
-- Lobby → Zone tab: move; a second identity (Debug drawer → *Seed peers*) appears and
-  moves; a zone change empties and refills the map.
+- Lobby → Zone tab: the caption reads `Map demo · 24×16`, with a wall down column
+  12 and chips `Zone001`–`Zone003` (the log panel says `map loaded: 24x16, 3
+  zone(s), 11 blocked`); from the spawn (5, 5), seven moves right — the seventh,
+  into column 12, is ignored; a second identity
+  (Debug drawer → *Seed peers*) appears and moves; a zone chip empties and refills
+  the map.
 - Chat tab: a zone message echoes back with your id; a whisper to `seed-1` echoes
   back too (seeds are real sockets on the fake); a whisper to `nobody` is refused
   with `unknown_user` in the log panel.
 - Party tab: create, invite a seeded peer, watch the roster.
-- Debug drawer → *Force close 4002*: the banner shows reconnecting, then connected;
+- Debug drawer → *Force close 4002* after four or more moves in one direction (fewer
+  would pass even with a broken resume): the banner shows reconnecting,
+  then connected, you are where you were, and the log shows no `refused:
+  move_too_far` (the demo enforces `maxMoveDelta` 3 against the retained position);
   *Force close 4000*: stopped, no retry. *Abort q* on the dungeon screen: the Aborted
   banner.
 - Login → **Key-value store**: the Announcements card lists two seeded notices,
@@ -52,8 +59,29 @@ package:
 
 Without a UI driver (an agent, a headless box), build with the autostart define,
 launch the binary, and read the log panel or stdout; that is how the ritual's "a
-Linux run" is satisfied from a terminal. Add a hook when a verification needs a
-state that is slow to reach by hand; keep it behind `kDebugMode`.
+Linux run" is satisfied from a terminal:
+
+```bash
+cd examples/playground
+flutter build linux --debug --dart-define=YYT_OFFLINE_AUTOSTART=true
+build/linux/x64/debug/bundle/yyt_playground
+```
+
+Add a hook when a verification needs a state that is slow to reach by hand; keep it
+behind `kDebugMode`.
+
+**A locked desktop session draws no frames.** Find yours with `loginctl
+list-sessions`, then `loginctl show-session <that id> -p LockedHint`. When it says
+`yes`, the autostart (a post-frame callback) never fires, the binary prints nothing
+after the VM service line, and `flutter run -d linux` loses the VM service at once
+("Lost connection to device"); `xvfb-run -a` around either did not help
+(2026-09-29). Before blaming the change, run the same two commands on `HEAD` in a
+scratch copy (`git archive HEAD | tar -x -C <scratch>`, then `flutter create .
+--platforms=linux --project-name yyt_playground --org life.yyt` in its example). If
+`HEAD` fails the same way, commit with a `Not run: offline demo on linux — desktop
+session locked (LockedHint=yes); HEAD fails the same way` line beside the levels
+you did run, and hand the walk to the user. If `HEAD` runs, the change is at fault.
+Widget tests are not the Linux run.
 
 ## Against the dev gateway
 

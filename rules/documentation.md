@@ -14,6 +14,14 @@
 A fact appears once. `docs/` links to a package README for a signature; a package
 README links to `docs/` for a flow; neither copies the gateway README — they cite it.
 
+**A claim about gateway behaviour is checked against
+`~/git/yyt.life/service/gateway/internal/`, not only its README.** README prose and
+Go comments are summaries — the `hub.go` comment "the client's own `pos` wins" is
+about lock order, not validation, and a guide once repeated it as a promise. Name
+the function you read (`Hub.Join`, `handlePosLocked`, `leaveZoneLocked`, `Flush`)
+in the review brief, so the reviewer reads the same code. The kv routes have the
+same rule (`architecture.md`).
+
 ## Package README shape
 
 1. `# yingyeothon_<name>` — exactly, first line.

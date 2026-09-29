@@ -75,8 +75,10 @@
      reports that it looks fine.
 
    Two angles are fixed — **correctness against the sources** (every claim, signature
-   and constant cited against the Dart sources, the tests, and the gateway README for
-   anything on the wire, plus a list of what could not be verified) and **the
+   and constant cited against the Dart sources, the tests, and for anything on the
+   wire the gateway README *and* its `gateway/internal/` source
+   ([documentation.md](documentation.md)), plus a list of what could not be
+   verified) and **the
    consumer's experience** (walk it as the Flutter developer: does it compile, is
    anything missing, what will they misread). The third is chosen for the change,
    most-expensive-defect first: *security* if it touches the wire, the token, a guard
