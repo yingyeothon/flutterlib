@@ -11,14 +11,24 @@ import '../transport/http_fetcher.dart';
 /// retries. The cache entry is published before the work starts, so a
 /// fetcher that fails synchronously still evicts the right entry.
 final class MapFetcher {
-  /// Creates a fetcher.
+  /// Creates a fetcher. Without [http] it builds an [HttpMapFetcher], which
+  /// [close] releases; an injected one is the caller's.
   MapFetcher({MapHttpFetcher? http, Logger? logger})
     : _http = http ?? HttpMapFetcher(),
+      _ownsHttp = http == null,
       _logger = logger ?? nullLogger;
 
   final MapHttpFetcher _http;
+  final bool _ownsHttp;
   final Logger _logger;
   final Map<String, Future<Object?>> _cache = <String, Future<Object?>>{};
+
+  /// Releases the default fetcher's connections.
+  void close() {
+    // `_ownsHttp` means this is the HttpMapFetcher built above.
+    final http = _http;
+    if (_ownsHttp && http is HttpMapFetcher) http.close();
+  }
 
   /// The parsed body: a JSON value, or the text when it is not JSON (or is
   /// larger than [Json.maxBigLength], which is refused as a failure rather

@@ -142,4 +142,28 @@ void main() {
       );
     });
   });
+
+  group('GatewayClientException', () {
+    test('each code names the refusal the gateway would send', () {
+      expect(
+        {for (final c in GatewayClientErrorCode.values) c: c.wire},
+        {
+          GatewayClientErrorCode.capabilityOff: GatewayErrorCode.capabilityOff,
+          GatewayClientErrorCode.reservedType: GatewayErrorCode.reservedType,
+          GatewayClientErrorCode.badMessage: GatewayErrorCode.badMessage,
+        },
+      );
+    });
+
+    test('toString is the wire code and the SDK message', () {
+      expect(
+        const GatewayClientException(
+          GatewayClientErrorCode.capabilityOff,
+          'pos is disabled on this channel',
+        ).toString(),
+        'GatewayClientException(capability_off): '
+        'pos is disabled on this channel',
+      );
+    });
+  });
 }

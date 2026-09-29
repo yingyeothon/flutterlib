@@ -1,5 +1,6 @@
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
+import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 
 import 'support/harness.dart';
@@ -68,15 +69,26 @@ void main() {
       for (final type in reservedGameFrameTypes) {
         expect(
           () => h.client.send(<String, Object?>{'type': type}),
-          throwsStateError,
+          throwsLocalRefusal(
+            GatewayClientErrorCode.reservedType,
+            '$type is set by the gateway',
+          ),
         );
       }
       h.client.send(<String, Object?>{'type': 'move', 'dx': 1});
       // The gateway refuses a frame without a string type as bad_message.
-      expect(
-        () => h.client.send(<String, Object?>{'noType': true}),
-        throwsStateError,
-      );
+      for (final frame in <JsonObject>[
+        <String, Object?>{'noType': true},
+        <String, Object?>{'type': 7},
+      ]) {
+        expect(
+          () => h.client.send(frame),
+          throwsLocalRefusal(
+            GatewayClientErrorCode.badMessage,
+            'a game frame needs a string type',
+          ),
+        );
+      }
       expect(h.socket.sent, hasLength(1));
     });
   });

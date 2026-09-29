@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
+import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 
@@ -28,7 +29,46 @@ final class ScriptedFetcher implements MapHttpFetcher {
   void fail(Object error) => pending.removeAt(0).completeError(error);
 }
 
+/// Counts `close()`; never answers.
+final class _ClosingClient extends http.BaseClient {
+  int closes = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      Completer<http.StreamedResponse>().future;
+
+  @override
+  void close() => closes++;
+}
+
 void main() {
+  test('map() after close() is refused; an injected fetcher stays open', () {
+    fakeAsync((async) {
+      final client = _ClosingClient();
+      final h = LobbyHarness(async, httpFetcher: HttpMapFetcher(client: client))
+        ..connect();
+      h.openAndHello();
+      Object? inFlight;
+      h.client.map().catchError((Object e) => inFlight = e);
+      unawaited(h.client.close());
+      async.flushMicrotasks();
+      expect(
+        () => h.client.map(),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            'map() after close()',
+          ),
+        ),
+      );
+      expect(client.closes, 0, reason: 'the caller owns what it passed');
+      async.elapse(const Duration(seconds: 31));
+      // The injected client was not closed, so the fetch ran to its deadline.
+      expect((inFlight! as MapFetchException).reason, 'timeout');
+    });
+  });
+
   test('map() needs hello first', () {
     fakeAsync((async) {
       final h = LobbyHarness(async);
@@ -64,6 +104,12 @@ void main() {
         isNot(contains('d.example')),
         reason: 'the URL is logged by length only',
       );
+      // A stop the caller did not ask for still serves the cached map.
+      h.socket.serverClose(4000);
+      expect(h.client.state, GatewayClientState.closed);
+      h.client.map().then(results.add);
+      async.flushMicrotasks();
+      expect(results, hasLength(4));
     });
   });
 

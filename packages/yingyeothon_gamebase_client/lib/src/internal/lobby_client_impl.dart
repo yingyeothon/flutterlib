@@ -57,6 +57,7 @@ final class LobbyClientImpl implements GatewayLobbyClient {
   final GatewaySocket _socket;
   late final List<StreamSubscription<Object?>> _subscriptions;
   MapFetcher? _mapFetcher;
+  bool _closeCalled = false;
   Hello? _hello;
   String? _partyId;
   PartyFrame? _roster;
@@ -141,6 +142,9 @@ final class LobbyClientImpl implements GatewayLobbyClient {
 
   @override
   Future<void> close() async {
+    _closeCalled = true;
+    // First: nothing below may skip releasing the default fetcher's client.
+    _mapFetcher?.close();
     await _socket.close();
     for (final s in _subscriptions) {
       await s.cancel();
@@ -170,6 +174,9 @@ final class LobbyClientImpl implements GatewayLobbyClient {
   Future<Object?> map() {
     final hello = _hello;
     if (hello == null) throw StateError('map() needs hello first');
+    // After close() a fresh fetcher would have nobody to release it. A
+    // client the gateway stopped still serves map(): close() comes later.
+    if (_closeCalled) throw StateError('map() after close()');
     final fetcher = _mapFetcher ??= MapFetcher(
       http: _options.httpFetcher,
       logger: _logger,
@@ -220,14 +227,20 @@ final class LobbyClientImpl implements GatewayLobbyClient {
 
   void _requireCapability(String name, bool? enabled) {
     if (enabled == false) {
-      throw StateError('capability_off: $name is disabled on this channel');
+      throw GatewayClientException(
+        GatewayClientErrorCode.capabilityOff,
+        '$name is disabled on this channel',
+      );
     }
   }
 
   void _requireScope(SayScope scope) {
     final caps = capabilities;
     if (caps != null && !caps.allowsScope(scope)) {
-      throw StateError('capability_off: say scope ${scope.wire} is disabled');
+      throw GatewayClientException(
+        GatewayClientErrorCode.capabilityOff,
+        'say scope ${scope.wire} is disabled on this channel',
+      );
     }
   }
 
@@ -292,7 +305,7 @@ final class LobbyClientImpl implements GatewayLobbyClient {
     }
     switch (_peers.apply(frame)) {
       case null:
-        if (frame is LeaveFrame || frame is PosBroadcastFrame) {
+        if (_namesUnknownPeer(frame)) {
           // A pos or leave for a peer not in view breaks the gateway's view
           // invariant; the frame is ignored for rendering and noted.
           _logger.debug('peer frame for an unknown peer', <String, Object?>{
@@ -310,6 +323,24 @@ final class LobbyClientImpl implements GatewayLobbyClient {
       case PeerMoved(:final peers):
         _peerMoved.emit(peers);
     }
+  }
+
+  /// Whether a frame the peer map ignored named someone it should have
+  /// known. Not: a batch with only your own entry (the gateway echoes every
+  /// mover, and flushes a restored position to you), or a frame for a zone
+  /// you left.
+  bool _namesUnknownPeer(LobbyServerFrame frame) {
+    final zone = _peers.zone;
+    final self = _hello?.userId;
+    // Before the first snapshot there is no zone to leave, so anything
+    // naming someone else is noted, as it always was.
+    bool current(String z) => zone == null || z == zone;
+    return switch (frame) {
+      LeaveFrame(zone: final z, :final userId) => current(z) && userId != self,
+      PosBroadcastFrame(zone: final z, :final peers) =>
+        current(z) && peers.any((p) => p.userId != self),
+      _ => false,
+    };
   }
 }
 

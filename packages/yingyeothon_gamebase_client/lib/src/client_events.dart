@@ -2,6 +2,7 @@ import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 
 import 'backoff.dart';
 import 'protocol/close_codes.dart';
+import 'protocol/frame_types.dart';
 import 'transport/web_socket.dart';
 
 /// Where a client is in its life.
@@ -107,6 +108,41 @@ final class GatewayStoppedException implements Exception {
 
   @override
   String toString() => 'GatewayStoppedException: $message';
+}
+
+/// Why a sender refused a frame locally. Each value is the refusal the
+/// gateway would have sent for the same frame, named by [wire].
+enum GatewayClientErrorCode {
+  /// `hello.capabilities` has that feature, or that `say` scope, off.
+  capabilityOff(GatewayErrorCode.capabilityOff),
+
+  /// `q`: the frame's `type` is `enter` or `leave`, the gateway's own.
+  reservedType(GatewayErrorCode.reservedType),
+
+  /// `q`: the frame has no string `type`.
+  badMessage(GatewayErrorCode.badMessage);
+
+  const GatewayClientErrorCode(this.wire);
+
+  /// The gateway's refusal code for the same frame.
+  final String wire;
+}
+
+/// A sender refused a frame before anything reached the wire, because the
+/// gateway would refuse it too. The connection is unaffected. Not connected
+/// is a [StateError], a bad argument an [ArgumentError]; this is neither.
+final class GatewayClientException implements Exception {
+  /// Creates the exception.
+  const GatewayClientException(this.code, this.message);
+
+  /// Which refusal.
+  final GatewayClientErrorCode code;
+
+  /// An SDK-authored explanation; never quotes the frame.
+  final String message;
+
+  @override
+  String toString() => 'GatewayClientException(${code.wire}): $message';
 }
 
 /// Options both clients share. Immutable; a client copies what it needs at

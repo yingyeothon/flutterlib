@@ -25,7 +25,7 @@ final class MapFetchException implements Exception {
   /// The HTTP status, or `0` when the request never got one.
   final int status;
 
-  /// One of `status`, `timeout`, `tooLarge`, `network`.
+  /// One of `status`, `timeout`, `tooLarge`, `network`, `badUrl`.
   final String reason;
 
   @override
@@ -43,15 +43,18 @@ abstract interface class MapHttpFetcher {
 /// The default fetcher over `package:http`, with the bounds a URL that came
 /// off the wire needs: a timeout, a response-size cap, and a redirect budget.
 final class HttpMapFetcher implements MapHttpFetcher {
-  /// Creates a fetcher. [client] defaults to a fresh [http.Client].
+  /// Creates a fetcher. [client] defaults to a fresh [http.Client], which
+  /// [close] releases; an injected one stays the caller's to close.
   HttpMapFetcher({
     http.Client? client,
     this.timeout = const Duration(seconds: 30),
     this.maxBytes = 16 << 20,
     this.maxRedirects = 5,
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.Client(),
+       _ownsClient = client == null;
 
   final http.Client _client;
+  final bool _ownsClient;
 
   /// Deadline for the whole request, headers and body together.
   final Duration timeout;
@@ -62,29 +65,69 @@ final class HttpMapFetcher implements MapHttpFetcher {
   /// Redirect budget.
   final int maxRedirects;
 
+  /// Closes the client this fetcher created, dropping its pooled
+  /// connections and failing a fetch still in flight; an injected client is
+  /// left open. Idempotent. A lobby client calls it from
+  /// `close()` on the fetcher it built itself, never on one you passed.
+  void close() {
+    if (_ownsClient) _client.close();
+  }
+
   @override
   Future<HttpFetchResult> get(Uri url) async {
-    final request = http.Request('GET', url)
-      ..followRedirects = true
-      ..maxRedirects = maxRedirects;
+    // Aborted at the deadline, so a host that never answers does not keep
+    // the socket after the caller has moved on.
+    final abort = Completer<void>();
+    final request =
+        http.AbortableRequest('GET', url, abortTrigger: abort.future)
+          ..followRedirects = true
+          ..maxRedirects = maxRedirects;
     // One deadline for headers and body: a per-chunk timeout would let a
-    // drip-feeding host hold the fetch open indefinitely.
-    final deadline = Future<Never>.delayed(
-      timeout,
-      () => throw const MapFetchException(0, 'timeout'),
-    );
+    // drip-feeding host hold the fetch open indefinitely. A cancellable timer,
+    // not `Future.delayed`: a fetch that settles must not leave a timer that
+    // keeps the isolate alive for the rest of the timeout.
+    final expired = Completer<Never>();
+    final timer = Timer(timeout, () {
+      expired.completeError(const MapFetchException(0, 'timeout'));
+      abort.complete();
+    });
+    try {
+      return await _fetch(request, expired.future);
+    } finally {
+      timer.cancel();
+    }
+  }
+
+  Future<HttpFetchResult> _fetch(
+    http.BaseRequest request,
+    Future<Never> deadline,
+  ) async {
     final http.StreamedResponse response;
+    // Future.sync: a client that throws synchronously fails the future
+    // instead, so the catches below still stand between it and the caller.
+    final sending = Future<http.StreamedResponse>.sync(
+      () => _client.send(request),
+    );
     try {
       response = await Future.any(<Future<http.StreamedResponse>>[
-        _client.send(request),
+        sending,
         deadline,
       ]);
+    } on MapFetchException {
+      // The deadline won. Headers that arrive later would hold a pooled
+      // connection with a body nobody reads: cancel it when it comes.
+      sending.then((answer) => answer.stream.listen(null).cancel()).ignore();
+      rethrow;
     } on http.ClientException {
       // The message names the URL; only the fact crosses.
       throw const MapFetchException(0, 'network');
     } on ArgumentError {
       // dart:io quotes the URI in its ArgumentError for a bad scheme or host.
       throw const MapFetchException(0, 'badUrl');
+    } on Exception {
+      // IOClient converts only socket and HTTP errors; a TLS failure escapes
+      // raw and may name the host.
+      throw const MapFetchException(0, 'network');
     }
     final declared = response.contentLength;
     if (declared != null && declared > maxBytes) {

@@ -61,20 +61,24 @@ void main() {
           },
         ),
       );
-      expect(() => h.client.pos(zone: 'z', x: 0, y: 0), throwsStateError);
-      expect(() => h.client.party.create(), throwsStateError);
-      expect(() => h.client.party.invite('u'), throwsStateError);
-      expect(() => h.client.party.accept('p'), throwsStateError);
-      expect(() => h.client.party.decline('p'), throwsStateError);
-      expect(() => h.client.party.leave(), throwsStateError);
-      expect(() => h.client.party.list(), throwsStateError);
+      Matcher off(String what) => throwsLocalRefusal(
+        GatewayClientErrorCode.capabilityOff,
+        '$what is disabled on this channel',
+      );
+      expect(() => h.client.pos(zone: 'z', x: 0, y: 0), off('pos'));
+      expect(() => h.client.party.create(), off('party'));
+      expect(() => h.client.party.invite('u'), off('party'));
+      expect(() => h.client.party.accept('p'), off('party'));
+      expect(() => h.client.party.decline('p'), off('party'));
+      expect(() => h.client.party.leave(), off('party'));
+      expect(() => h.client.party.list(), off('party'));
       expect(
         () => h.client.event(scope: SayScope.party, name: 'n'),
-        throwsStateError,
+        off('event'),
       );
       expect(
         () => h.client.say(scope: SayScope.zone, text: 't'),
-        throwsStateError,
+        off('say scope zone'),
       );
       h.client.say(scope: SayScope.party, text: 'ok');
       h.client.ping();
@@ -112,7 +116,13 @@ void main() {
         );
         expect(h.client.capabilities!.say, isEmpty);
         for (final scope in SayScope.values) {
-          expect(() => h.client.say(scope: scope, text: 't'), throwsStateError);
+          expect(
+            () => h.client.say(scope: scope, text: 't'),
+            throwsLocalRefusal(
+              GatewayClientErrorCode.capabilityOff,
+              'say scope ${scope.wire} is disabled on this channel',
+            ),
+          );
         }
       }
     });
@@ -135,7 +145,10 @@ void main() {
       h.client.event(scope: SayScope.user, name: 'n', to: 'u');
       expect(
         () => h.client.say(scope: SayScope.party, text: 't'),
-        throwsStateError,
+        throwsLocalRefusal(
+          GatewayClientErrorCode.capabilityOff,
+          'say scope party is disabled on this channel',
+        ),
       );
       expect(h.socket.sent, hasLength(2));
     });

@@ -201,6 +201,36 @@ void main() {
     });
   });
 
+  test('an unasked snapshot after hello is applied; the SDK sends no pos', () {
+    fakeAsync((async) {
+      final h = LobbyHarness(async)..connect();
+      h.openAndHello();
+      h.socket.serverClose(4002);
+      h.elapse(500);
+      // The gateway re-enters the retained zone right after `hello`; the
+      // client has sent nothing, and the zone is not `hello.zone`.
+      h.openAndHello();
+      expect(h.client.peers.zone, isNull);
+      h.socket.serverSend(<String, Object?>{
+        'type': 'snapshot',
+        'zone': 'Zone007',
+        'peers': <Object?>[
+          <String, Object?>{'userId': 'p1', 'x': 1, 'y': 2},
+        ],
+      });
+      expect(h.socket.sent, isEmpty);
+      expect(h.client.peers.zone, 'Zone007');
+      expect(h.client.peers.all().map((p) => p.userId), ['p1']);
+      expect(h.trace, [
+        'connected:me',
+        'disconnected:4002:true',
+        'reconnecting:1:500',
+        'connected:me',
+        'snapshot:Zone007',
+      ]);
+    });
+  });
+
   test('the whole event order of a reconnect cycle', () {
     fakeAsync((async) {
       final h = LobbyHarness(async)..connect();

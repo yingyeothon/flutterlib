@@ -77,6 +77,12 @@ void main() {
     fakeAsync((async) {
       final h = LobbyHarness(async)..connect();
       h.openAndHello();
+      // Before any snapshot a frame naming someone else is noted.
+      h.socket.serverSend(<String, Object?>{
+        'type': 'pos',
+        'zone': 'Z',
+        'peers': <Object?>[peer('early', 1, 1)],
+      });
       h.socket.serverSend(<String, Object?>{
         'type': 'snapshot',
         'zone': 'Z',
@@ -98,6 +104,28 @@ void main() {
         'zone': 'Z',
         'userId': 'ghost',
       });
+      // Normal traffic, not noted: your own echo, and a zone you are not in.
+      h.socket.serverSend(<String, Object?>{
+        'type': 'pos',
+        'zone': 'Z',
+        'peers': <Object?>[peer('me', 2, 2)],
+      });
+      h.socket.serverSend(<String, Object?>{
+        'type': 'pos',
+        'zone': 'Old',
+        'peers': <Object?>[peer('ghost', 1, 1)],
+      });
+      h.socket.serverSend(<String, Object?>{
+        'type': 'leave',
+        'zone': 'Old',
+        'userId': 'ghost',
+      });
+      // Your echo beside an unknown peer is still a gap worth noting.
+      h.socket.serverSend(<String, Object?>{
+        'type': 'pos',
+        'zone': 'Z',
+        'peers': <Object?>[peer('me', 3, 3), peer('ghost', 1, 1)],
+      });
       expect(h.trace, [
         'connected:me',
         'snapshot:Z',
@@ -106,7 +134,7 @@ void main() {
       expect(h.client.peers.all(), isEmpty);
       expect(
         h.log.lines.where((l) => l.contains('peer frame for an unknown peer')),
-        hasLength(2),
+        hasLength(4),
       );
     });
   });

@@ -67,8 +67,10 @@ final class Hello {
   /// Immutable, public map asset. A new map version is a new URL.
   final String mapUrl;
 
-  /// The zone the game should start in; you have no zone until the first
-  /// `pos`.
+  /// The channel's default zone, where a new player starts. It is not where
+  /// you are: that is the zone of the first `snapshot`, which follows your
+  /// first `pos`, or arrives unasked when the gateway still holds a position
+  /// it wrote for you within the last 30 minutes.
   final String zone;
 
   /// Present when the gateway already knows your party.

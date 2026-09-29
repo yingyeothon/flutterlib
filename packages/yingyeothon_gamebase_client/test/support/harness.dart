@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
+import 'package:test/test.dart';
 import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
@@ -15,6 +16,14 @@ const String fixtureToken = 'eyJ.secret-token.sig';
 const String fixtureChannelId = 'lobby_0123456789abcdef';
 
 const String fixtureGatewayUrl = 'wss://gw.example';
+
+/// A sender's local refusal with [code] and exactly [message].
+Matcher throwsLocalRefusal(GatewayClientErrorCode code, String message) =>
+    throwsA(
+      isA<GatewayClientException>()
+          .having((e) => e.code, 'code', code)
+          .having((e) => e.message, 'message', message),
+    );
 
 /// Captures formatted lines.
 final class CapturingLogWriter implements LogWriter {

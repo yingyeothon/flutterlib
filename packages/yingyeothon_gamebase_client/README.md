@@ -58,7 +58,7 @@ lobby.said.listen((say) => chat.add('${say.from}: ${say.text}'));
 lobby.stopped.listen((e) => showEnd(e.reason));
 
 final hello = await lobby.connect();      // throws GatewayStoppedException if it never gets there
-lobby.pos(zone: hello.zone, x: 0, y: 0);  // the first pos enters the zone; a snapshot follows
+lobby.pos(zone: hello.zone, x: 0, y: 0);  // a new player's first pos; a snapshot follows
 lobby.say(scope: SayScope.zone, text: 'hi');
 
 await lobby.close();                      // in dispose()
@@ -101,8 +101,8 @@ The guide covers each feature: [Lobby](../../docs/lobby.md),
 Backoff is 500 ms doubling to 15 s with ±20 % jitter; five consecutive closes before
 open (a refused handshake looks like one) end the session so a dead token does not
 retry forever; a lobby socket that shows no `hello` within 10 s is closed and retried.
-The local checks (`capability_off`, a `dir` over 16 bytes, `enter`/`leave` on `q`) are
-a courtesy; **the gateway enforces every limit**, and a length it refuses (`too_long`)
+The local checks (`capability_off`, a `dir` over 16 bytes, `enter`/`leave` and a
+missing string `type` on `q`) are a courtesy; **the gateway enforces every limit**, and a length it refuses (`too_long`)
 still counts toward `4003`.
 
 ## Public API
@@ -111,7 +111,8 @@ still counts toward `4003`.
   `PartyCommands`, `GatewayGameClient`, `GatewayGameClientOptions`,
   `GatewayClientOptions`.
 - State and events: `GatewayClientState`, `DisconnectedEvent`, `ReconnectingEvent`,
-  `StoppedEvent`, `ProtocolErrorEvent`, `GameEndedEvent`, `GatewayStoppedException`.
+  `StoppedEvent`, `ProtocolErrorEvent`, `GameEndedEvent`, `GatewayStoppedException`,
+  `GatewayClientException`, `GatewayClientErrorCode`.
 - Wire types: `Hello`, `Aoi`, `Capabilities`, `Peer`, `SayScope`, `FrameTypes`,
   `GatewayErrorCode`, `reservedGameFrameTypes`; the frames `LobbyServerFrame`,
   `SnapshotFrame`, `EnterFrame`, `LeaveFrame`, `PosBroadcastFrame`,
@@ -156,3 +157,6 @@ still counts toward `4003`.
 - A `say` capability that is present and `null` reads as an empty list: the gateway
   marshals an empty Go slice as `null` and refuses every scope for it.
 - No clock abstraction; tests use `package:fake_async`.
+- A local refusal is a `GatewayClientException` whose code names the gateway refusal
+  it mirrors; both originals throw a generic error with the code in the message text,
+  indistinguishable from "not connected".

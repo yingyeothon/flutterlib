@@ -35,8 +35,8 @@ final class GatewayLobbyClientOptions extends GatewayClientOptions {
   final int helloTimeoutMs;
 }
 
-/// The `party.*` senders. Each is refused locally when `hello` said the
-/// channel has parties off.
+/// The `party.*` senders. Each throws [GatewayClientException] when `hello`
+/// said the channel has parties off.
 abstract interface class PartyCommands {
   /// `party.create`.
   void create();
@@ -61,8 +61,12 @@ abstract interface class PartyCommands {
 /// before reporting a connection, maintains the peer map from the gateway's
 /// `snapshot` / `enter` / `leave` / `pos` frames, and exposes typed senders.
 ///
-/// After a reconnect the peer map is empty until the game re-sends `pos`
-/// and the gateway answers with a fresh `snapshot`. Every stream is a
+/// Every `hello` starts an empty peer map. When the gateway still holds a
+/// position for you (written by your last move, zone entry or restore,
+/// within the last 30 minutes) it re-enters that zone and sends a
+/// `snapshot` without being asked; otherwise the map stays empty until the
+/// game sends `pos`. The lobby guide's _Positions and zones_ says what that
+/// means for your first `pos`. Every stream is a
 /// synchronous broadcast: a listener added before `connect()` sees every
 /// event, in the order the gateway sent them.
 abstract interface class GatewayLobbyClient {
@@ -98,15 +102,18 @@ abstract interface class GatewayLobbyClient {
   /// called a second time.
   Future<Hello> connect();
 
-  /// Closes for good and releases every stream. Idempotent.
+  /// Closes for good, releases every stream and the HTTP client of the
+  /// default map fetcher (never one passed as
+  /// [GatewayLobbyClientOptions.httpFetcher]). Idempotent.
   Future<void> close();
 
   /// Fetches `hello.mapUrl`, cached per URL for the client's life. Throws
-  /// [StateError] before `hello` and [MapFetchException] on failure.
+  /// [StateError] before `hello` or after [close], and [MapFetchException]
+  /// on failure.
   Future<Object?> map();
 
-  /// Announces a position. Throws [StateError] when the channel has `pos`
-  /// off and [ArgumentError] when [dir] exceeds 16 bytes.
+  /// Announces a position. Throws [GatewayClientException] when the channel
+  /// has `pos` off and [ArgumentError] when [dir] exceeds 16 bytes.
   void pos({
     required String zone,
     required double x,
@@ -114,11 +121,13 @@ abstract interface class GatewayLobbyClient {
     String? dir,
   });
 
-  /// Chat. Throws [StateError] when the channel does not allow [scope].
+  /// Chat. Throws [GatewayClientException] when the channel does not allow
+  /// [scope].
   void say({required SayScope scope, required String text, String? to});
 
-  /// A game event. Throws [StateError] when `event` is off or [scope] is
-  /// not allowed. A `null` [payload] is omitted from the frame.
+  /// A game event. Throws [GatewayClientException] when `event` is off; the
+  /// `say` scope list does not apply. A `null` [payload] is omitted from the
+  /// frame.
   void event({
     required SayScope scope,
     required String name,

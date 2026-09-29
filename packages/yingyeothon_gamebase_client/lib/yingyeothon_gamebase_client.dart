@@ -12,6 +12,8 @@ export 'src/client_events.dart'
     show
         DisconnectedEvent,
         GameEndedEvent,
+        GatewayClientErrorCode,
+        GatewayClientException,
         GatewayClientOptions,
         GatewayClientState,
         GatewayStoppedException,

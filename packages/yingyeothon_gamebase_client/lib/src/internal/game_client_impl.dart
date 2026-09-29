@@ -110,10 +110,16 @@ final class GameClientImpl implements GatewayGameClient {
   void send(JsonObject frame) {
     final type = frame.getString('type');
     if (type == null) {
-      throw StateError('bad_message: a game frame needs a string type');
+      throw const GatewayClientException(
+        GatewayClientErrorCode.badMessage,
+        'a game frame needs a string type',
+      );
     }
     if (reservedGameFrameTypes.contains(type)) {
-      throw StateError('reserved_type: $type is set by the gateway');
+      throw GatewayClientException(
+        GatewayClientErrorCode.reservedType,
+        '$type is set by the gateway',
+      );
     }
     _socket.send(frame);
   }
