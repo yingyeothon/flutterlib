@@ -30,9 +30,11 @@ point here, never restate or contradict.
 
 ## Failure
 
-- **Refuse locally only what the gateway would refuse.** A local check gives a fast
-  `StateError`/`ArgumentError`; the gateway is the enforcement. Never be stricter than
-  the gateway.
+- **Refuse locally only what the gateway would refuse.** A local check gives a fast,
+  typed error — `GatewayClientException` whose code names the gateway refusal it
+  mirrors, or `ArgumentError` for a bad argument; `StateError` is kept for a call
+  in the wrong state (not connected, `connect()` twice, `map()` before `hello`). The
+  gateway is the enforcement. Never be stricter than the gateway.
 - **A message never carries the input.** A parse failure is a code and an offset; a
   transport refusal names an index, not a character; an HTTP failure is a status. Test
   it by asserting equality with a template nothing from the input can satisfy.

@@ -10,11 +10,11 @@ connection stays up. Log the code, never the message — it may quote what you s
 
 | Code | Sent by | Why you would hit it |
 | --- | --- | --- |
-| `bad_message` | any | not a JSON object with a string `type`, a field of the wrong type (`dir` not a string, `x`/`y` not numbers), `dir` over 16 bytes, or an `event` without a `name` |
+| `bad_message` | any | not a JSON object with a string `type` (the SDK refuses this locally on `q`), a field of the wrong type (`dir` not a string, `x`/`y` not numbers), `dir` over 16 bytes, or an `event` whose `name` is empty or over 64 bytes |
 | `capability_off` | `pos`, `say`, `event`, `party.*` | the channel has that feature off; the SDK refuses these locally too when `hello` said so |
 | `rate_limited` | any | over the channel's per-connection bucket (lobby: `rateLimit`/s; `q`: 20/s, burst 2×) |
 | `bad_scope` | `say`, `event` | `scope` is not `zone`, `party` or `user`; a known scope the channel has off is `capability_off` |
-| `bad_zone` | `pos`, zone-scoped `say`/`event` | a bad `zone`, or a zone message before your first `pos` |
+| `bad_zone` | `pos`, zone-scoped `say`/`event` | a bad `zone`, or a zone message while you are in no zone (before your first `pos`, unless the gateway restored a position) |
 | `move_too_far` | `pos` | a jump over `maxMoveDelta` inside one zone |
 | `unknown_user` | `to`, `party.invite` | nobody online by that id |
 | `no_party` | party `say`/`event`, `party.invite/leave` | you are in none |
@@ -23,7 +23,7 @@ connection stays up. Log the code, never the message — it may quote what you s
 | `not_invited` | `party.accept/decline` | no pending invite for you |
 | `unknown_party` | `party.accept/decline` | no such party |
 | `not_leader` | `party.invite` | only the leader invites |
-| `too_long` | `say`, `event` | `text` empty or over 1024 B, `name` over 64 B, payload over 8 KB |
+| `too_long` | `say`, `event` | `text` empty or over 1024 B, payload over 8 KB |
 | `reserved_type` | `q` | you sent `enter` or `leave`; the SDK refuses these locally |
 | `unavailable` | `q` | the push to the actor failed; three in a row abort the run |
 | `frame_too_large` | gateway → you | a frame meant for you exceeded 32 KB and was dropped; you have a gap |
@@ -33,8 +33,9 @@ Fifty refusals on one socket close it with `4003`.
 ## What the SDK does not check
 
 Byte limits (`text`, `name`, `payload`, `zone`) and rates. It checks only what
-`hello` told it (`capability_off`), the 16-byte `dir`, and the reserved `q` types —
-a fast error, not the enforcement. Stay under the gateway's limits yourself.
+`hello` told it (`capability_off`), the 16-byte `dir`, and on `q` the reserved types
+and a frame without a string `type` — a fast error, not the enforcement. Stay under
+the gateway's limits yourself.
 
 ## Exceptions
 
@@ -42,15 +43,25 @@ a fast error, not the enforcement. Stay under the gateway's limits yourself.
 | --- | --- | --- |
 | `connect()` | `GatewayStoppedException` | the connection stopped before it became usable |
 | `connect()` again | `StateError` | one session per client |
-| any sender | `StateError` | not connected, or `capability_off` from `hello` |
+| `pos`, `say`, `event`, `party.*` | `GatewayClientException`, code `capabilityOff` | the last `hello` said the channel has that feature or `say` scope off |
+| `send()` on `q` | `GatewayClientException`, code `reservedType` / `badMessage` | `type` is `enter` or `leave` / no string `type` |
 | `pos(dir:)` | `ArgumentError` | `dir` over 16 bytes |
-| `send()` on `q` | `StateError` | `type` is `enter` or `leave` |
-| `map()` | `StateError` / `MapFetchException(status, reason)` | before `hello` / the fetch failed (`status`, `timeout`, `tooLarge`, `network`, `badUrl`) |
+| any sender | `StateError` | not connected — checked after the three above |
+| `map()` | `StateError` / `MapFetchException(status, reason)` | before `hello` or after `close()` / the fetch failed (`status`, `timeout`, `tooLarge`, `network`, `badUrl`) |
 | `AuthClient` | `AuthFailure(kind, status)` | see [Authentication](authentication.md) |
 | `KvStoreClient` | `KvStoreException(status, code)` / `ArgumentError` | the store or the network refused / a key, name, owner, value size, `ttl`, `limit` or `ifMatch` the server would refuse; see [Key-value store](kvstore.md) |
 | `WebSocketChannelFactory.connect` | `ArgumentError` | a subprotocol with an illegal character (reported by index), a URL that is not `ws`/`wss` |
 
 None of these carries a token, a body or a URL in its message.
+
+`GatewayClientException` is an `Exception`; `StateError` and `ArgumentError` are
+`Error`s. An `on Exception` clause around a sender therefore catches a local refusal
+but neither "not connected" nor a `dir` over 16 bytes — add `on StateError` where a
+button can fire while the client reconnects, and keep `dir` short. The local checks
+run before the connection check; the lobby's read the last `hello`, which survives a
+disconnect, so a disconnected client with `pos` off still throws
+`GatewayClientException`. `toString()` prints the wire code:
+`GatewayClientException(capability_off): pos is disabled on this channel`.
 
 ## Close codes
 

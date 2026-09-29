@@ -97,6 +97,11 @@ lobby.pos(zone: hello.zone, x: 3, y: 4, dir: 'n');
 The first `pos` enters the zone; the gateway answers with a `snapshot` of everyone in
 view, and from then on `peerEntered`, `peerLeft` and `peerMoved` keep `lobby.peers`
 current. Render from `lobby.peers.all()`, once per `hello.tick` milliseconds at most.
+`hello.zone` is where a *new* player starts. A returning player whose position the
+gateway wrote less than 30 minutes ago is already placed there, and a first `pos` far
+from it *in that zone* is refused, as is every step after it, until the socket closes
+with `4003`. Read [A retained position](lobby.md#a-retained-position) before you
+ship; it has the few lines that handle it.
 [Lobby](lobby.md) covers chat, events, parties and the map.
 
 ## 6. Run it on desktop

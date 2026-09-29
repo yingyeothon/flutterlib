@@ -41,7 +41,10 @@ screen shows both cases against the offline demo.
 ## Background and resume
 
 iOS suspends sockets when the app pauses; Android may. Expect a `disconnected` on
-resume and let the policy run (`4002` idle → reconnect). To end cleanly instead:
+resume and let the policy run (`4002` idle → reconnect). Either way the gateway may
+have kept your position: keep the one you last sent outside the client and announce
+it on `connected` ([A retained position](lobby.md#a-retained-position)). To end
+cleanly instead:
 
 ```dart
 class _LobbyState extends State<LobbyPage> with WidgetsBindingObserver {

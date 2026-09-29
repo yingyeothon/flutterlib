@@ -20,8 +20,12 @@ final lobby = GatewayLobbyClient(GatewayLobbyClientOptions(
 
 final hello = await lobby.connect();   // completes on the gateway's hello
 lobby.peerEntered.listen((peer) => print('${peer.userId} is here'));
-lobby.pos(zone: hello.zone, x: 1, y: 2, dir: 'n');
+lobby.pos(zone: hello.zone, x: 1, y: 2, dir: 'n'); // a new player's first pos
 ```
+
+A returning player may already be placed elsewhere; the guide's
+[A retained position](docs/lobby.md#a-retained-position) shows the few lines that
+handle it.
 
 ## Documentation
 

@@ -21,15 +21,16 @@ The first frame, always. The client holds no configuration and learns everything
 | `connectionId` | this socket on the gateway |
 | `tick` | position flush interval, ms; `peerMoved` fires at most this often |
 | `mapUrl` | the immutable map asset; `map()` fetches it |
-| `zone` | where the game should start; **you have no zone until your first `pos`** |
+| `zone` | the channel's default zone, where a new player starts — **not where you are**; see [Positions and zones](#positions-and-zones) |
 | `partyId` | present when the gateway already knows your party (a reconnect) |
 | `capabilities` | the channel's config object verbatim |
 | `aoi` | the view rule: `maxPeers` always, `range` when the channel has a box |
 
 `lobby.capabilities` is what the senders check: a `pos: false` makes `pos()` throw
-`StateError` before anything is sent; a `say` list that lacks `party` makes
-`say(scope: SayScope.party)` throw. A field the gateway did not send is treated as
-allowed, and the gateway is the enforcement either way.
+`GatewayClientException` (code `capabilityOff`) before anything is sent; a `say` list
+that lacks `party` makes `say(scope: SayScope.party)` throw it too. A field the
+gateway did not send is treated as allowed, and the gateway is the enforcement either
+way.
 
 ## Positions and zones
 
@@ -39,8 +40,87 @@ lobby.pos(zone: hello.zone, x: 3, y: 4, dir: 'n');
 
 The first `pos` enters a zone; the gateway answers with a `snapshot`. A `pos` with a
 different `zone` is a zone change: `leave` goes to the old zone's viewers, a fresh
-`snapshot` to you, `enter` to the new zone's. Whether you *may* enter a zone is your
-game's rule — **zones are not private**, and the gateway does not enforce access.
+`snapshot` to you, `enter` to the new zone's. Inside one zone a `pos` may move each
+axis at most the channel's `maxMoveDelta` (3 by default) from where the gateway has
+you; a longer jump is refused with `move_too_far`. Whether you *may* enter a zone is
+your game's rule — **zones are not private**, and the gateway does not enforce
+access.
+
+### A retained position
+
+The gateway keeps the position it last wrote for you — your last move, zone entry
+or restore — for 30 minutes; each write restarts the clock, and standing still does
+not. With the `pos` capability on, every new socket within that time — a reconnect,
+a new client, a relaunched app — is put back there before the gateway reads
+anything you send: `hello` is followed, unasked, by a `snapshot` of that zone, and
+usually by a `pos` batch that carries your own entry (unless your own `pos` is read
+first and replaces it). `peers.zone` names the zone;
+`peers` drops your own entry, so your coordinates are on `lobby.frames`, in the
+`PosBroadcastFrame` entry whose `userId` is `hello.userId`.
+
+`hello.zone` is the channel's default zone, not the retained one, and that decides
+what your first `pos` does:
+
+- into another zone, it is a zone change and always lands (the retained position is
+  simply left behind);
+- into the retained zone, it is a move, checked against `maxMoveDelta` from the
+  retained point. A fixed spawn point far from it is refused with `move_too_far`,
+  and so is every step computed from that spawn point, until fifty refusals close
+  the socket with `4003`.
+
+So keep the position you last sent, per user and channel, somewhere that outlives
+the client. On **every** `connected` — the first one included — send it, and send
+no other `pos` until the gateway has answered that one, so that every own entry you
+see is about it:
+
+- an own entry equal to what you sent: accepted, you are there;
+- a different one: the restore. It stands if your `pos` is refused with
+  `move_too_far` (before or after the entry arrives); otherwise the echo of your
+  accepted `pos` follows it.
+
+A `pos` batch can be dropped under backpressure; a refusal never is. So give up
+after a few seconds: without a refusal your `pos` was accepted, so keep what you
+sent; after a refusal keep the entry you saw, and if you saw none, reconnect and
+place again. Keep `kept` current on every move, not only here.
+
+```dart
+typedef At = ({String zone, double x, double y});
+At? kept; // outlives the client; one per user and channel
+At? placing, seen; // the resume pos, and the gateway's other word meanwhile
+var refused = false;
+
+void settle(At at) => (kept, placing) = (at, null); // then moves may resume
+
+lobby.connected.listen((hello) {
+  final p = kept ?? (zone: hello.zone, x: 5.0, y: 5.0);
+  lobby.pos(zone: p.zone, x: p.x, y: p.y); // throws when `pos` is off
+  (placing, seen, refused) = (p, null, false);
+});
+lobby.refused.listen((e) {
+  if (placing == null || e.code != GatewayErrorCode.moveTooFar) return;
+  refused = true;
+  if (seen case final at?) settle(at);
+});
+lobby.frames.listen((frame) {
+  final sent = placing;
+  if (sent == null || frame is! PosBroadcastFrame || frame.zone != sent.zone) {
+    return;
+  }
+  for (final peer in frame.peers) {
+    if (peer.userId != lobby.hello?.userId) continue;
+    final At at = (zone: frame.zone, x: peer.x, y: peer.y);
+    if (at == sent || refused) {
+      settle(at);
+    } else {
+      seen = at;
+    }
+  }
+});
+```
+
+The [playground](../examples/playground/lib/session.dart) does the same in its
+`Session`, with the timeout. `maxMoveDelta` is a console setting of the channel; `hello` does not carry
+it.
 
 `dir` is your own opaque facing token, at most 16 bytes; an omitted `dir` in a later
 `pos` clears it for your peers. Coordinates are `double`; the gateway refuses a jump
@@ -69,7 +149,8 @@ Rules the map applies so you do not have to:
 - a `pos` or `leave` for a peer you do not know is ignored (the gateway's view
   invariant says it cannot happen; if it does, it is a gateway bug worth logging);
 - on `disconnected` the map is emptied; after the next `hello` it stays empty until
-  you send `pos` and a `snapshot` arrives.
+  a `snapshot` arrives — unasked for a retained position, otherwise after your
+  `pos`.
 
 `snapshots`, `peerEntered`, `peerLeft` and `peerMoved` fire after the map changed; a
 `snapshot` that changes nothing still fires `snapshots`.
@@ -148,7 +229,14 @@ final map = await lobby.map(); // a JSON value, or the text when it is not JSON
 Fetched from `hello.mapUrl` with no credentials (the asset is public), cached per URL
 for the client's life, shared between concurrent calls, and evicted on failure so the
 next call retries. A new map version is a new URL in a later `hello`. Bounds: 30 s,
-16 MiB, 5 redirects; a body over 64 MiB is a `MapFetchException`, not text.
+16 MiB, 5 redirects; a body over 64 MiB is a `MapFetchException`, not text. The
+default fetcher's HTTP client is released by `lobby.close()`; one you pass in
+`httpFetcher` stays yours to close.
+
+The document is your game's own format; the SDK neither reads nor validates it. The
+[playground](../examples/playground/README.md#the-map) reads `name`, `width`,
+`height`, `zones` and `blocked` cells from it and falls back per field, so a map
+change is an edit of that document, not of the app.
 
 ## Escape hatches
 

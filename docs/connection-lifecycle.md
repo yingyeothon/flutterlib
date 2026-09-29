@@ -41,8 +41,12 @@ For one reconnect cycle a lobby client emits, in this order:
 2. `disconnected(code, reason, willReconnect: true)` — the socket went away;
    `peers` is already empty.
 3. `reconnecting(attempt: 1, delayMs: 500)`.
-4. `connected(hello)` again — the gateway sent a fresh `hello`; a `party` roster may
-   follow; the peer map stays empty until you send `pos` and a `snapshot` arrives.
+4. `connected(hello)` again — the gateway sent a fresh `hello`. When it still holds
+   your position ([A retained position](lobby.md#a-retained-position)) a `snapshot`
+   of that zone follows unasked, then a `party` roster if you are in one; otherwise
+   only the roster may follow, and the peer map stays empty until you send `pos`.
+   Every `connected` after the first is a reconnect; announce your position on
+   every one, the first included.
 
 And for the end:
 
@@ -95,7 +99,8 @@ resume and let the policy run — `4002` reconnects. If you want a clean end ins
 
 ## Shutting down
 
-`close()` is idempotent and does four things: cancels any pending reconnect, sends
+`close()` is idempotent and does five things: cancels any pending reconnect, sends
 `1000 client closed`, emits one final `disconnected(willReconnect: false)` if a
-socket was open or opening, and closes every stream. Call it from `dispose()`. A `connect()`
+socket was open or opening, closes every stream, and on a lobby client releases the
+default map fetcher's HTTP client (one you passed as `httpFetcher` is yours). Call it from `dispose()`. A `connect()`
 still pending fails with `GatewayStoppedException`.

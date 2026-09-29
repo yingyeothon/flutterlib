@@ -22,10 +22,10 @@ The URL is not the gateway (a proxy, a wrong port, an `http` health endpoint).
 
 ## Connected, but no peers ever appear
 
-You have no zone until your first `pos`. Send one with `hello.zone`, watch
-`snapshots`. [Lobby](lobby.md#positions-and-zones).
+Unless the gateway retained a position for you, you have no zone until your first
+`pos`. Send one with `hello.zone`, watch `snapshots`. [Lobby](lobby.md#positions-and-zones).
 
-## `pos()` throws `StateError: capability_off`
+## `pos()` throws `GatewayClientException(capability_off)`
 
 `hello.capabilities.pos` is `false` on this channel; the console setting decides.
 [Console and options](console-and-options.md#what-the-console-setting-becomes-in-hello).
@@ -33,12 +33,14 @@ You have no zone until your first `pos`. Send one with `hello.zone`, watch
 ## `refused` with `move_too_far`
 
 A jump over the channel's `maxMoveDelta` inside one zone. Move in steps, or change
-zone. [Errors](errors.md#refusals).
+zone. [Errors](errors.md#refusals). Right after connecting, it is
+[a restored position](#every-move-is-refused-with-move_too_far-right-after-connecting).
 
 ## `refused` with `too_long`, then the socket closes with `4003`
 
-Fifty refusals on one socket end it. Keep `text` under 1024 bytes, `name` under 64,
-`payload` under 8 KB; the SDK does not check these for you. [Errors](errors.md#what-the-sdk-does-not-check).
+Fifty refusals on one socket end it. Keep `text` at 1–1024 bytes and `payload`
+under 8 KB (an empty or over-64-byte event `name` is `bad_message`); the SDK does not
+check these for you. [Errors](errors.md#what-the-sdk-does-not-check).
 
 ## The socket closes with `4000` when a second window opens
 
@@ -73,8 +75,19 @@ and the redirect URL with the channel's allowlist. [Flutter](flutter.md#platform
 
 ## The app resumes from background and nothing arrives
 
-The socket was suspended and closed; the client reconnects on `4002` but the peer map
-is empty until you send `pos` again. Send one on resume. [Flutter](flutter.md#background-and-resume).
+The socket was suspended and closed; the client reconnects on `4002`. If the gateway
+wrote your position less than 30 minutes ago (a move, a zone entry or an earlier
+restore) it puts you back and sends a `snapshot` unasked; otherwise the peer map is empty until you send `pos`. Announce the position
+you kept on every `connected`. [A retained position](lobby.md#a-retained-position),
+[Flutter](flutter.md#background-and-resume).
+
+## Every move is refused with `move_too_far` right after connecting
+
+The gateway restored a position it retained for you, and your first `pos` — a spawn
+point, or `hello.zone` with fixed coordinates — is a jump from it inside the same
+zone. Resume from the position you kept, send nothing else until it is answered,
+and after the refusal take your own entry in a `pos` batch as where you are.
+[A retained position](lobby.md#a-retained-position).
 
 ## Nothing helps
 

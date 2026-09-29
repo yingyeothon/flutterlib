@@ -31,7 +31,7 @@ starts a dungeon ([Dungeon](dungeon.md)).
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `httpFetcher` | `HttpMapFetcher()` — 30 s, 16 MiB, 5 redirects | how `map()` fetches `hello.mapUrl` |
+| `httpFetcher` | `HttpMapFetcher()` — 30 s, 16 MiB, 5 redirects | how `map()` fetches `hello.mapUrl`; `close()` releases the default one's HTTP client, while one you pass (and its `client`) stays yours to close |
 | `helloTimeoutMs` | 10 000 | how long an open socket may stay silent before it is closed and retried |
 
 `GatewayGameClientOptions` adds `gameId`.
@@ -54,6 +54,7 @@ starts a dungeon ([Dungeon](dungeon.md)).
 | capabilities (`pos`, `say` scopes, `party`, `event`, `debug`) | `capabilities` | `lobby.capabilities`; a `false` refuses the sender locally |
 | `flushIntervalMs` | `tick` | how often `peerMoved` fires at most |
 | map asset | `mapUrl` | `lobby.map()` |
-| default zone | `zone` | where to send the first `pos` |
+| default zone | `zone` | where a new player starts — not a position the gateway retained ([Lobby](lobby.md#a-retained-position)) |
+| `maxMoveDelta` | not sent | a same-zone `pos` that moves either axis further is refused with `move_too_far`; 3 when unset |
 | `maxPeers`, AOI `range` | `aoi` | `hello.aoi`; how many peers a view holds |
 | party size | `party.max` | `roster.max`, present once you have a roster |
