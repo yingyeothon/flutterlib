@@ -70,18 +70,33 @@ build/linux/x64/debug/bundle/yyt_playground
 Add a hook when a verification needs a state that is slow to reach by hand; keep it
 behind `kDebugMode`.
 
-**A locked desktop session draws no frames.** Find yours with `loginctl
+**A desktop session can draw no frames.** Find yours with `loginctl
 list-sessions`, then `loginctl show-session <that id> -p LockedHint`. When it says
 `yes`, the autostart (a post-frame callback) never fires, the binary prints nothing
 after the VM service line, and `flutter run -d linux` loses the VM service at once
 ("Lost connection to device"); `xvfb-run -a` around either did not help
-(2026-09-29). Before blaming the change, run the same two commands on `HEAD` in a
-scratch copy (`git archive HEAD | tar -x -C <scratch>`, then `flutter create .
---platforms=linux --project-name yyt_playground --org life.yyt` in its example). If
-`HEAD` fails the same way, commit with a `Not run: offline demo on linux — desktop
-session locked (LockedHint=yes); HEAD fails the same way` line beside the levels
-you did run, and hand the walk to the user. If `HEAD` runs, the change is at fault.
-Widget tests are not the Linux run.
+(2026-09-29). **The same symptom came back with `LockedHint=no`** (2026-09-30, X11,
+monitor on, `/dev/dri` readable): the window exists but stays unmapped
+(`xwininfo -root -tree | grep yyt_playground`, then `xwininfo -id <window id>`
+prints `Map State: IsUnMapped`), because the generated runner shows it only on the
+first frame and no frame comes. Showing the window before the first frame did not
+help, and a blank app failed the same way, so the host is at fault; the cause is
+unknown.
+
+Before blaming the change, run the same two commands on `HEAD` in a scratch copy
+(`git archive HEAD | tar -x -C <scratch>/head`, then `flutter create .
+--platforms=linux --project-name yyt_playground --org life.yyt` in its example), and
+a blank app: `flutter create --platforms=linux <scratch>/blank`, then `flutter run
+-d linux` in it (`<scratch>` is the session scratchpad; its window is `blank` in
+`xwininfo`). If both fail the same way, commit with the matching line beside the
+levels you did run, and hand the walk to the user:
+
+- `Not run: offline demo on linux — desktop session locked (LockedHint=yes); HEAD and a blank app fail the same way`
+- `Not run: offline demo on linux — window never mapped (LockedHint=no); HEAD and a blank app fail the same way`
+
+If `HEAD` runs, the change is at fault. If only the blank app runs, `HEAD` is
+already broken, which is a separate task (`workflow.md`, "A gate that was already
+red"). Widget tests are not the Linux run.
 
 ## Against the dev gateway
 

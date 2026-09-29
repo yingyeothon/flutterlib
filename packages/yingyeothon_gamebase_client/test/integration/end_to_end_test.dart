@@ -55,7 +55,11 @@ void main() {
     expect(entered.userId, 'bob');
     expect(alice.peers.all().map((p) => p.userId), ['bob']);
 
-    final moved = alice.peerMoved.first;
+    // Like the gateway, the fake flushes an entrant's position on the next
+    // tick, so a batch with bob at (3, 4) may land first: wait for the move.
+    final moved = alice.peerMoved.firstWhere(
+      (batch) => batch.any((p) => p.userId == 'bob' && p.x == 5),
+    );
     bob.pos(zone: 'Zone001', x: 5, y: 6);
     expect((await soon(moved)).single.x, 5);
     expect(alice.peers.get('bob')!.y, 6);
@@ -136,10 +140,12 @@ void main() {
     await soon(alice.snapshots.first);
 
     final reconnected = alice.connected.first;
+    // The fake retains the zone and re-sends the snapshot right after hello,
+    // so listen before the close rather than after the reconnect.
+    final restored = alice.snapshots.first;
     await gw.closeUser('alice', 4002, reason: 'idle');
     await soon(reconnected);
-    // The fake retains the zone and re-sends the snapshot after hello.
-    final snapshot = await soon(alice.snapshots.first);
+    final snapshot = await soon(restored);
     expect(snapshot.zone, 'Z');
     expect(trace, [
       'connected',

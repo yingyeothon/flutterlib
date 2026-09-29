@@ -106,6 +106,18 @@
   `stallGame`, `holdOutbound`). Keep a new one off by default, so the other suites
   do not change, and list it in the fake README's paragraph that begins "It also
   reproduces the failures".
+- Like the gateway, the fake flushes an entrant's position to its zone on the next
+  tick and, with `pos` on, re-sends a retained zone's snapshot right after `hello`
+  (its README). So a test waits for the batch that carries the position it
+  expects — `peerMoved.firstWhere(...)` above the fake, `nextPosOf` in a loop in
+  its own suite — never for whichever batch comes next, and subscribes to a frame
+  before the step that triggers it. A missed wait passes alone and fails only
+  under load (the pre-push gate, 2026-09-30). After a change to the fake's flushes
+  or frame order, run each lobby suite ten times in a shell loop while another
+  suite runs beside it, and stop at the first failure: `dart test -t integration`
+  in `packages/yingyeothon_gamebase_client`, `flutter test
+  test/lobby_screen_test.dart test/dungeon_screen_test.dart` in
+  `examples/playground`, and `dart test` in `packages/yingyeothon_fake_gateway`.
 - The fake gateway's tests drive it with raw `dart:io` sockets, and its `/kv/*` routes
   with a raw `HttpClient`, so the fake is tested against the protocol, not against
   the SDK it exists to test.
