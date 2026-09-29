@@ -666,6 +666,189 @@ void main() {
     });
   });
 
+  group('the server scope, mail and the clock', () {
+    test(
+      'either scope user is an owner namespace; project writes are mail',
+      () async {
+        expect(KvScope.server, 'server');
+        // (readScope, writeScope) -> (isUserNamespace, acceptsMail)
+        const cases = <(String, String, bool, bool)>[
+          ('user', 'user', true, false),
+          ('user', 'project', true, true),
+          ('user', 'server', true, false),
+          ('project', 'user', true, false),
+          ('project', 'team', false, false),
+          ('server', 'server', false, false),
+          ('project', 'server', false, false),
+        ];
+        for (final (read, write, namespace, mail) in cases) {
+          fake.answer(200, '{"readScope":"$read","writeScope":"$write"}');
+          final info = await client.collection('c').info();
+          expect(info.isUserNamespace, namespace, reason: '$read/$write');
+          expect(info.acceptsMail, mail, reason: '$read/$write');
+        }
+      },
+    );
+
+    test(
+      'getEntry reads the writer stamp; absent or bad reads as null',
+      () async {
+        fake.answer(200, '"hi"', <String, String>{
+          'ETag': '"1"',
+          'X-KV-From': 'server',
+          'X-KV-At': '1700000100',
+        });
+        var entry = await client.collection('inbox').mine.getEntry('k');
+        expect(entry!.from, 'server');
+        expect(entry.updatedAt, 1700000100);
+        fake.answer(200, '"hi"', <String, String>{'ETag': '"1"'});
+        entry = await client.collection('inbox').mine.getEntry('k');
+        expect(entry!.from, isNull);
+        expect(entry.updatedAt, isNull);
+        fake.answer(200, '"hi"', <String, String>{
+          'ETag': '"1"',
+          'X-KV-From': '',
+          'X-KV-At': 'soon',
+        });
+        entry = await client.collection('inbox').mine.getEntry('k');
+        expect(entry!.from, isNull);
+        expect(entry.updatedAt, isNull);
+      },
+    );
+
+    test('a list row carries from where the server sent it', () async {
+      fake.answer(
+        200,
+        '{"entries":['
+        '{"owner":"o1","from":"0123456789abcdef0123456789abcdef","key":"a","version":1,"bytes":2,"updatedAt":1},'
+        '{"owner":"o1","key":"b","version":1,"bytes":2,"updatedAt":1},'
+        '{"owner":"o1","from":"","key":"c","version":1,"bytes":2,"updatedAt":1}'
+        ']}',
+      );
+      final page = await client.collection('inbox').mine.list();
+      expect(page.entries[0].from, '0123456789abcdef0123456789abcdef');
+      expect(page.entries[1].from, isNull);
+      expect(page.entries[2].from, isNull, reason: 'empty is dropped');
+      expect(fake.single.headers['authorization'], 'Bearer $fixtureToken');
+    });
+
+    test(
+      'mail: a plain PUT into another owner; exists and sender_full',
+      () async {
+        const other = '0123456789abcdef0123456789abcdef';
+        const key = 'fedcba9876543210fedcba9876543210:gift-1';
+        final inbox = client.collection('inbox').owner(other);
+        fake.answer(204);
+        final result = await inbox.put(key, <String, Object?>{'gold': 5});
+        expect(fake.single.url.path, '/kv/inbox/u/$other/entries/$key');
+        expect(fake.single.method, 'PUT');
+        expect(fake.single.headers['authorization'], 'Bearer $fixtureToken');
+        expect(fake.single.headers.containsKey('if-match'), isFalse);
+        expect(fake.single.headers.containsKey('if-none-match'), isFalse);
+        expect(result.created, isNull);
+        expect(result.version, isNull);
+
+        fake.answer(
+          409,
+          '{"error":{"code":"conflict","message":"x","details":{"reason":"exists"}}}',
+        );
+        var e = await refused(() => inbox.put(key, 1));
+        expect(e.isKeyTaken, isTrue);
+        expect(e.isFull, isFalse);
+        expect(e.isVersionMismatch, isFalse);
+        expect(e.isOutOfRange, isFalse);
+
+        fake.answer(
+          409,
+          '{"error":{"code":"conflict","message":"x","details":{"reason":"sender_full"}}}',
+        );
+        e = await refused(() => inbox.put(key, 1));
+        expect(e.isFull, isTrue);
+        expect(e.isKeyTaken, isFalse);
+        expect(e.reason, 'sender_full');
+      },
+    );
+
+    test('incr sends min and max; out_of_range carries no value', () async {
+      fake.answer(200, '{"value":3,"version":2}');
+      await client.collection('c').incr('lives', -1, min: 0, max: 5);
+      expect(fake.requests.last.body, '{"incr":-1,"min":0,"max":5}');
+      expect(
+        fake.requests.last.headers['authorization'],
+        'Bearer $fixtureToken',
+      );
+      fake.answer(200, '{"value":3,"version":3}');
+      await client.collection('c').incr('lives', 1, max: 3);
+      expect(fake.requests.last.body, '{"incr":1,"max":3}');
+      fake.answer(200, '{"value":3,"version":4}');
+      await client.collection('c').incr('lives', 0, min: 3, max: 3);
+      expect(fake.requests.last.body, '{"incr":0,"min":3,"max":3}');
+
+      fake.answer(
+        409,
+        '{"error":{"code":"conflict","message":"x",'
+        '"details":{"reason":"out_of_range","value":987654}}}',
+      );
+      final e = await refused(
+        () => client.collection('c').incr('lives', -1, min: 0),
+      );
+      expect(e.isOutOfRange, isTrue);
+      expect(e.isVersionMismatch, isFalse);
+      expect(e.currentVersion, isNull);
+      expect(e.hasCurrentVersion, isFalse);
+
+      final before = fake.requests.length;
+      expect(
+        () => client.collection('c').incr('lives', 1, min: 2, max: 1),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            'kv incr min must not be greater than max',
+          ),
+        ),
+      );
+      expect(fake.requests, hasLength(before));
+    });
+
+    test('serverTime: GET /time without the token, in UTC', () async {
+      fake.answer(
+        200,
+        '{"now":"2026-09-30T00:00:01.250Z","epochMs":1790726401250}',
+      );
+      final at = await client.serverTime();
+      final request = fake.single;
+      expect(request.method, 'GET');
+      expect(request.url.toString(), 'https://doc.example/time');
+      expect(request.headers.containsKey('authorization'), isFalse);
+      expect(request.headers['accept'], 'application/json');
+      expect(at.isUtc, isTrue);
+      expect(at.millisecondsSinceEpoch, 1790726401250);
+      expect(log.lines.join('\n'), contains('"route":"time"'));
+      expect(log.lines.join('\n'), isNot(contains(fixtureToken)));
+    });
+
+    test('serverTime: a malformed answer or a refusal', () async {
+      for (final body in <String>[
+        '[]',
+        '{}',
+        '{"epochMs":"1"}',
+        '{"epochMs":0}',
+        '{"epochMs":8640000000000001}',
+        '{"epochMs":9007199254740991}',
+      ]) {
+        fake.answer(200, body);
+        final e = await refused(client.serverTime);
+        expect(e.code, KvStoreException.malformedResponseCode, reason: body);
+        expect(e.status, 200);
+      }
+      fake.answer(503, '{"error":{"code":"unavailable","message":"x"}}');
+      final e = await refused(client.serverTime);
+      expect(e.status, 503);
+      expect(e.code, 'unavailable');
+    });
+  });
+
   group('transport', () {
     test('network failures are status 0, code network', () async {
       final ns = client.collection('c');

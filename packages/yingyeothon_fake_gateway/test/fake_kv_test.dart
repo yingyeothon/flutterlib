@@ -88,6 +88,22 @@ void main() {
             readScope: 'team',
             writeScope: 'project',
           ),
+          FakeKvCollection(
+            name: 'mailbox',
+            readScope: 'user',
+            writeScope: 'project',
+            maxEntriesPerOwner: 2,
+          ),
+          FakeKvCollection(
+            name: 'ops',
+            readScope: 'server',
+            writeScope: 'server',
+          ),
+          FakeKvCollection(
+            name: 'notices',
+            readScope: 'user',
+            writeScope: 'server',
+          ),
         ],
       ),
     );
@@ -715,4 +731,244 @@ void main() {
     expect(reborn.etag, '"2"');
     expect(gw.kv.valueText('nope', 'x'), isNull);
   });
+
+  test('the server scope admits the doc apiKey and refuses a player', () async {
+    const server = 'yds.auth_0123456789abcdef.k';
+    final put = await raw.call(
+      'PUT',
+      '/kv/ops/entries/flag',
+      token: server,
+      body: 'true',
+    );
+    expect(put.status, 201);
+    final read = await raw.call('GET', '/kv/ops/entries/flag', token: server);
+    expect(read.status, 200);
+    expect(read.headers.value('x-kv-from'), isNull, reason: 'shared: no stamp');
+    expect((await raw.call('GET', '/kv/ops/entries/flag')).status, 403);
+    expect(
+      (await raw.call('PUT', '/kv/ops/entries/flag', body: 'false')).status,
+      403,
+    );
+    expect(gw.kv.valueText('ops', 'flag'), 'true');
+    // Meta: a player learns nothing of a collection it could never touch; the
+    // server key does, and a user namespace stays readable to its players.
+    expect((await raw.call('GET', '/kv/ops')).status, 403);
+    expect((await raw.call('GET', '/kv/ops', token: server)).status, 200);
+    expect((await raw.call('GET', '/kv/notices')).status, 200);
+    expect((await raw.call('GET', '/kv/secrets', token: server)).status, 403);
+  });
+
+  test(
+    'either scope user is an owner namespace, stamped by the platform',
+    () async {
+      const server = 'yds.auth_0123456789abcdef.k';
+      // readScope user + writeScope server: the server writes a notice, the
+      // owner reads it with the stamp; the shared path is the wrong one.
+      final shared = await raw.call(
+        'PUT',
+        '/kv/notices/entries/n1',
+        token: server,
+        body: '1',
+      );
+      expect(shared.status, 400);
+      expect(shared.error.getObject('details')!['reason'], 'wrong_namespace');
+      final put = await raw.call(
+        'PUT',
+        '/kv/notices/u/alice/entries/n1',
+        token: server,
+        body: '{"msg":"hi"}',
+      );
+      expect(put.status, 201);
+      final mine = await raw.call('GET', '/kv/notices/u/me/entries/n1');
+      expect(mine.status, 200);
+      expect(mine.headers.value('x-kv-from'), 'server');
+      final at = int.parse(mine.headers.value('x-kv-at')!);
+      expect(at, greaterThan(1700000000));
+      final list = await raw.call('GET', '/kv/notices/u/me/entries');
+      final row = (list.json! as JsonObject).getListOrEmpty('entries').single;
+      expect((row! as JsonObject)['from'], 'server');
+      expect((row as JsonObject)['updatedAt'], at);
+      // A player cannot write under writeScope server, not even its own slot.
+      expect(
+        (await raw.call(
+          'PUT',
+          '/kv/notices/u/me/entries/n2',
+          body: '1',
+        )).status,
+        403,
+      );
+    },
+  );
+
+  test('mail: create-only, own-id keys, stamped, never overwritten', () async {
+    const key = 'alice:gift-1';
+    final sent = await raw.call(
+      'PUT',
+      '/kv/mailbox/u/bob/entries/$key',
+      body: '{"gold":5}',
+    );
+    expect(sent.status, 204, reason: 'a writer without the read right');
+    expect(sent.etag, isNull);
+    expect(gw.kv.valueText('mailbox', key, owner: 'bob'), '{"gold":5}');
+
+    final taken = await raw.call(
+      'PUT',
+      '/kv/mailbox/u/bob/entries/$key',
+      body: '{"gold":9}',
+    );
+    expect(taken.status, 409);
+    expect(taken.error.getObject('details')!, <String, Object?>{
+      'reason': 'exists',
+    });
+    expect(gw.kv.valueText('mailbox', key, owner: 'bob'), '{"gold":5}');
+
+    final foreign = await raw.call(
+      'PUT',
+      '/kv/mailbox/u/bob/entries/carol:x',
+      body: '1',
+    );
+    expect(foreign.status, 400, reason: "another sender's prefix");
+    for (final header in <String, String>{
+      'if-none-match': '*',
+      'if-match': '"1"',
+    }.entries) {
+      final conditional = await raw.call(
+        'PUT',
+        '/kv/mailbox/u/bob/entries/alice:gift-2',
+        headers: <String, String>{header.key: header.value},
+        body: '1',
+      );
+      expect(conditional.status, 400, reason: header.key);
+    }
+    expect(
+      (await raw.call('DELETE', '/kv/mailbox/u/bob/entries/$key')).status,
+      403,
+    );
+    expect(
+      (await raw.call(
+        'PATCH',
+        '/kv/mailbox/u/bob/entries/alice:n',
+        body: '{"incr":1}',
+      )).status,
+      403,
+    );
+    expect(
+      (await raw.call('GET', '/kv/mailbox/u/bob/entries/$key')).status,
+      403,
+      reason: 'the sender may not read the inbox',
+    );
+
+    final read = await raw.call(
+      'GET',
+      '/kv/mailbox/u/me/entries/$key',
+      token: 'bob',
+    );
+    expect(read.status, 200);
+    expect(read.headers.value('x-kv-from'), 'alice');
+    // The owner may overwrite its own row, which re-stamps it.
+    final own = await raw.call(
+      'PUT',
+      '/kv/mailbox/u/me/entries/$key',
+      token: 'bob',
+      body: '{"gold":5,"read":true}',
+    );
+    expect(own.status, 204);
+    final after = await raw.call(
+      'GET',
+      '/kv/mailbox/u/me/entries/$key',
+      token: 'bob',
+    );
+    expect(after.headers.value('x-kv-from'), 'bob');
+    expect(
+      (await raw.call(
+        'DELETE',
+        '/kv/mailbox/u/me/entries/$key',
+        token: 'bob',
+      )).status,
+      204,
+    );
+  });
+
+  test('mail caps: owner_full, then sender_full across inboxes', () async {
+    Future<Answer> send(String to, String key) =>
+        raw.call('PUT', '/kv/mailbox/u/$to/entries/alice:$key', body: '1');
+    expect((await send('bob', 'a')).status, 204);
+    expect((await send('bob', 'b')).status, 204);
+    final ownerFull = await send('bob', 'c');
+    expect(ownerFull.status, 409);
+    expect(ownerFull.error.getObject('details')!['reason'], 'owner_full');
+    // alice has now sent 2 = maxEntriesPerOwner; a fresh inbox still refuses.
+    final senderFull = await send('carol', 'a');
+    expect(senderFull.status, 409);
+    expect(senderFull.error.getObject('details')!['reason'], 'sender_full');
+    // Rows in alice's own namespace do not count as sent.
+    expect(
+      (await raw.call(
+        'PUT',
+        '/kv/mailbox/u/me/entries/note',
+        body: '1',
+      )).status,
+      201,
+    );
+    // Once bob deletes one, alice may send again.
+    expect(
+      (await raw.call(
+        'DELETE',
+        '/kv/mailbox/u/me/entries/alice:a',
+        token: 'bob',
+      )).status,
+      204,
+    );
+    expect((await send('carol', 'a')).status, 204);
+  });
+
+  test(
+    'incr: min and max bound one call; out_of_range names the value',
+    () async {
+      Future<Answer> incr(String body) =>
+          raw.call('PATCH', '/kv/shared/entries/lives', body: body);
+      expect((await incr('{"incr":3,"max":3}')).status, 200);
+      final over = await incr('{"incr":1,"max":3}');
+      expect(over.status, 409);
+      expect(over.error.getObject('details')!, <String, Object?>{
+        'reason': 'out_of_range',
+        'value': 3,
+      });
+      expect(gw.kv.valueText('shared', 'lives'), '3');
+      final under = await incr('{"incr":-4,"min":0}');
+      expect(under.status, 409);
+      expect(under.error.getObject('details')!['reason'], 'out_of_range');
+      final ok = await incr('{"incr":-3,"min":0,"max":3}');
+      expect(ok.status, 200);
+      expect(ok.json, <String, Object?>{'value': 0, 'version': 2});
+      for (final bad in <String>[
+        '{"incr":1,"min":2,"max":1}',
+        '{"incr":1,"min":"0"}',
+        '{"incr":1,"max":1.5}',
+        '{"incr":1,"max":null}',
+      ]) {
+        expect((await incr(bad)).status, 400, reason: bad);
+      }
+    },
+  );
+
+  test(
+    'GET /time answers without a token; other methods are refused',
+    () async {
+      final before = DateTime.now().millisecondsSinceEpoch;
+      final answer = await raw.call('GET', '/time', token: null);
+      final after = DateTime.now().millisecondsSinceEpoch;
+      expect(answer.status, 200);
+      expect(answer.headers.value('cache-control'), 'no-store');
+      final body = answer.json! as JsonObject;
+      final epochMs = body.getInt('epochMs')!;
+      expect(epochMs, inInclusiveRange(before, after));
+      expect(
+        DateTime.parse(body.getString('now')!).millisecondsSinceEpoch,
+        epochMs,
+      );
+      expect((await raw.call('GET', '/time/', token: null)).status, 200);
+      expect((await raw.call('POST', '/time', token: null)).status, 405);
+    },
+  );
 }

@@ -43,6 +43,14 @@ Future<void> walkTheTwoCases(
   required String announcements,
   required String profile,
 }) async {
+  // The platform clock, with no token; within a minute of this machine's.
+  final serverNow = await soon(kv.serverTime());
+  expect(serverNow.isUtc, isTrue);
+  expect(
+    serverNow.difference(DateTime.now().toUtc()).inSeconds.abs(),
+    lessThan(60),
+  );
+
   // (1) announcements: list newest first, with values.
   final notices = await soon(
     kv.collection(announcements).list(values: true, order: KvOrder.desc),
@@ -74,6 +82,10 @@ Future<void> walkTheTwoCases(
   final entry = await soon(mine.getEntry(key));
   expect(entry!.value, <String, Object?>{'volume': 0.5});
   expect(entry.version, created.version);
+  // An owner namespace carries the platform's writer stamp: the player's id.
+  expect(entry.from, isNotNull);
+  expect(entry.from, isNot('server'));
+  expect(entry.updatedAt, isNotNull);
   final updated = await soon(
     mine.put(
       key,

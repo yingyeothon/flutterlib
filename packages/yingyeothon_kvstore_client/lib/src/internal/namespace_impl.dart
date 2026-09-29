@@ -81,6 +81,8 @@ class KvNamespaceImpl implements KvNamespace {
       value: _decode(answer.body),
       version: version,
       expiresAt: answer.expiresAt,
+      from: answer.from,
+      updatedAt: answer.updatedAt,
     );
   }
 
@@ -161,9 +163,11 @@ class KvNamespaceImpl implements KvNamespace {
       final version = row.getInt('version');
       if (key == null || version == null) throw _malformed;
       final valueText = row.getString('valueText');
+      final from = row.getString('from');
       rows.add(
         KvListEntry(
           owner: row.getString('owner'),
+          from: from == null || from.isEmpty ? null : from,
           key: key,
           version: version,
           bytes: row.getInt('bytes') ?? 0,
@@ -182,14 +186,27 @@ class KvNamespaceImpl implements KvNamespace {
   }
 
   @override
-  Future<KvIncrResult> incr(String key, int delta, {int? ttl}) async {
+  Future<KvIncrResult> incr(
+    String key,
+    int delta, {
+    int? ttl,
+    int? min,
+    int? max,
+  }) async {
     final path = KvPaths.entry(ref, ownerId, key);
+    if (min != null && max != null && min > max) {
+      throw ArgumentError('kv incr min must not be greater than max');
+    }
     final answer = await requester.send(
       'PATCH',
       KvRoute.incr,
       path,
       query: KvPaths.ttlQuery(ttl),
-      body: Json.encode(<String, Object?>{'incr': delta}),
+      body: Json.encode(<String, Object?>{
+        'incr': delta,
+        'min': ?min,
+        'max': ?max,
+      }),
     );
     final result = _decode(answer.body);
     if (result is! JsonObject) throw _malformed;

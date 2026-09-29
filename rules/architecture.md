@@ -93,7 +93,11 @@
   (`services/state/src/kvstore.ts`) is what the fake and the client follow. Two of
   the todo's facts were wrong against it (delete is not "204 always"; a deleted row
   is removed and a reborn key restarts at version 1, only an *expired* row keeps its
-  version). Check each fact against the source before pinning it in a test.
+  version). Check each fact against the source before pinning it in a test. The one
+  sanctioned exception is where the code contradicts its own comment and the
+  service's docs: the fake then follows the comment and lists the deviation in its
+  README (_Differences_). When the service fixes either side, follow the code and
+  drop the README entry.
 - One `.timeout` around the whole exchange (headers and body together): a per-chunk
   `stream.timeout` lets a drip-fed body run until the byte cap. A token is checked
   for printable ASCII at construction because `dart:io` refuses any other header
@@ -110,6 +114,29 @@
 - A write-only caller sees `204` and no `ETag` on every write; `created` and
   `version` are null then (`expiresAt` still arrives when that write set a `ttl`),
   and `created` is derived from the status only when a version came back.
+- **The client and the fake follow the service's kv source, not a date.** The last
+  port is service `d3fac64` (2026-09-09: the `server` scope, mail and its stamp,
+  `incr` bounds, `GET /time`); it went unported for three weeks, and meanwhile
+  `isUserNamespace` read `writeScope` alone while the service's `isKvPerOwner` takes
+  either scope, so a mail collection got the wrong path. Every later commit up to
+  `a3fa068` was read on 2026-09-30 and changes no route a client calls (console caps,
+  the `/lb` and `/social` stacks). Before kv work, fetch the `service` repository and
+  run, as one line:
+
+  ```bash
+  git -C ~/git/yyt.life/service log --oneline a3fa068..origin/main -- services/state/src services/state/README.md packages/console-db/src/kvstore.ts docs/kvstore.md
+  ```
+
+  Read every commit it lists, port what a client can see into both the client and
+  the fake, then replace `a3fa068` in this bullet (both places) with the newest
+  commit you read, and `d3fac64` with the newest commit you ported, if any. An empty
+  list changes nothing here.
+- The meta route is the current instance of the exception above (reported to the
+  owner 2026-09-30); `yingyeothon_fake_gateway/README.md` owns the details.
+- `GET /time` is the one route sent without the token (`send(authorized: false)`);
+  the `authorization` header is set after the caller's headers, so no caller can
+  replace it. A new unauthenticated route needs the same flag, never a second
+  requester.
 
 ## Seams
 

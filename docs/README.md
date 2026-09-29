@@ -18,7 +18,7 @@ packages. Each page is one task; read the first three in order, then jump.
 | --- | --- |
 | show players moving around a shared zone, chat, parties | [Lobby](lobby.md) |
 | run a dungeon against your own game actor | [Dungeon](dungeon.md) |
-| read announcements, save a player's own record | [Key-value store](kvstore.md) |
+| read announcements, save a player's own record, send mail, read the platform clock | [Key-value store](kvstore.md) |
 | load game files from the CDN — a manifest, a database, music — encrypted or not | [Asset bundles](assets.md) |
 | know what happens on a bad network, a gateway restart, a dead token | [Connection lifecycle](connection-lifecycle.md) |
 | handle every refusal, close code and exception | [Errors](errors.md) |

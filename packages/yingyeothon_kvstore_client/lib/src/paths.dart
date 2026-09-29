@@ -5,6 +5,9 @@ import 'types.dart';
 /// server's grammar first, so nothing that reaches a path needs encoding and
 /// a query value is the only thing `Uri` escapes.
 abstract final class KvPaths {
+  /// `/time`, the platform clock.
+  static const List<String> time = <String>['time'];
+
   /// `/kv/{col}`.
   static List<String> collection(String ref) => <String>[
     'kv',

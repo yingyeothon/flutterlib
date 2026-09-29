@@ -49,6 +49,12 @@ abstract interface class KvStoreClient {
   /// grammars.
   KvCollection collection(String nameOrId);
 
+  /// `GET /time`: the platform clock, in UTC to the millisecond, for a daily
+  /// reset or an event window a client cannot trust its own clock for. Sent
+  /// without the token. Call it once per session and keep the offset: it
+  /// shares the stage's request budget and is never cached.
+  Future<DateTime> serverTime();
+
   /// Closes the HTTP client this library created; an injected one is left
   /// to its owner. Idempotent. A request after `close()` on an owned client
   /// fails as a [KvStoreException] with [KvStoreException.networkCode].
@@ -68,8 +74,12 @@ abstract interface class KvCollection implements KvNamespace {
   KvNamespace get mine;
 
   /// Another owner's user namespace, `/kv/{col}/u/{ownerId}/entries`; the
-  /// server key may write any of them. Throws [ArgumentError] for an owner id
-  /// outside the server's grammar.
+  /// server key may write any of them. On a collection that
+  /// [KvCollectionInfo.acceptsMail], a player may `put` here too: create-only
+  /// (a taken key is [KvStoreException.isKeyTaken]), with no `ifMatch` or
+  /// `ifNoneMatch`, and a key that starts with the player's own user id and a
+  /// colon (`<myId>:…`); it may never `delete` or `incr` there. Throws
+  /// [ArgumentError] for an owner id outside the server's grammar.
   KvNamespace owner(String ownerId);
 }
 
@@ -113,6 +123,15 @@ abstract interface class KvNamespace {
   });
 
   /// Atomic `{"incr": delta}` on a numeric value; a missing key starts at
-  /// zero. Needs the read right.
-  Future<KvIncrResult> incr(String key, int delta, {int? ttl});
+  /// zero. Needs the read right. [min] and [max] bound the result of this one
+  /// call — nothing stores them — and a result outside them writes nothing
+  /// and is [KvStoreException.isOutOfRange]; [min] over [max] is an
+  /// [ArgumentError].
+  Future<KvIncrResult> incr(
+    String key,
+    int delta, {
+    int? ttl,
+    int? min,
+    int? max,
+  });
 }

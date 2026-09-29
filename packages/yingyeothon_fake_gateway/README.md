@@ -6,8 +6,9 @@ closely enough to drive `yingyeothon_gamebase_client` end to end over the real
 transport: the bearer subprotocol handshake, `hello`, zones and the peer-map frames,
 chat and events by scope, parties with the gateway's `omitempty` marshalling,
 `ping`/`pong`, the documented refusal codes, and the close codes a test injects. The
-same listener serves the state stack's `/kv/*` routes over an in-memory store, so
-`yingyeothon_kvstore_client` and the example's key-value screen run offline too.
+same listener serves the state stack's `/kv/*` routes over an in-memory store, and
+its `/time` clock, so `yingyeothon_kvstore_client` and the example's key-value screen
+run offline too.
 
 It also reproduces the failures a client must survive, each on request: the
 handshake statuses (`404` for a channel outside `channels`, `403` for a game or member
@@ -114,8 +115,15 @@ gw.kv.valueText('profile', 'settings', owner: 'alice'); // '{"volume":0.5}'
   transport, the handshake and the close codes are exercised for real.
 - The `q` side has no actor: by default it echoes every frame as
   `{"type":"echo","of":…}`; `onGameFrame` scripts anything else.
-- The kv store follows `services/state`'s routes (scopes, both namespaces, versions
-  that keep climbing, conditional writes, TTL, `incr`, cursors, the `409` reasons)
-  (a version survives expiry, not a delete) but admits any plain segment as an owner id, because its identities are token
-  texts rather than 32-hex user ids, and stores values in the clear whatever
-  `encrypted` says.
+- The kv store follows `services/state`'s routes (the four scopes, both namespaces —
+  per owner when either scope is `user` — versions that keep climbing, conditional
+  writes, TTL, `incr` with `min`/`max`, mail and the writer stamp, cursors, the
+  `409` reasons, and `GET /time`) (a version survives expiry, not a delete) but
+  admits any plain segment as an owner id, because its identities are token texts
+  rather than 32-hex user ids — so a mail writer's id is not held to the owner
+  grammar and a player's stamp is its token text — and stores values in the clear
+  whatever `encrypted` says.
+- `GET /kv/{col}` refuses a player only when both scopes are `team` or `server`, as
+  the service's route comment says (its docs still name `team`/`team` only); the
+  deployed route code also refuses a player on any collection without a `project`
+  scope (`user`/`user` included), which reads as a service defect and is not copied.

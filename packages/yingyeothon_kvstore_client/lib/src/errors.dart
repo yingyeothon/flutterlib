@@ -34,8 +34,9 @@ final class KvStoreException implements Exception {
   final String code;
 
   /// `error.details.reason` when the server named one: `collection_full`,
-  /// `owner_full`, `not_a_number`, `overflow`, `wrong_namespace`, and on a
-  /// `503` `kv_encryption_not_configured` or `kv_value_unreadable`.
+  /// `owner_full`, `sender_full`, `exists`, `not_a_number`, `overflow`,
+  /// `out_of_range`, `wrong_namespace`, and on a `503`
+  /// `kv_encryption_not_configured` or `kv_value_unreadable`.
   final String? reason;
 
   /// On a lost compare-and-set, the live version; `null` with
@@ -46,8 +47,8 @@ final class KvStoreException implements Exception {
   /// Whether the server sent `details.current` at all.
   final bool hasCurrentVersion;
 
-  /// `409`: a lost compare-and-set, a full collection or owner, or an `incr`
-  /// on a non-number.
+  /// `409`: a lost compare-and-set, a full collection, owner or sender, a
+  /// taken mail key, or an `incr` on a non-number or out of its range.
   bool get isConflict => status == 409;
 
   /// `403`: the scope refuses this principal, or a conditional write without
@@ -61,9 +62,26 @@ final class KvStoreException implements Exception {
   /// [currentVersion] is filled only for a caller with the read right.
   bool get isVersionMismatch => isConflict && reason == null;
 
-  /// `409` with `details.reason` `collection_full` or `owner_full`.
+  /// `409` with `details.reason` `collection_full`, `owner_full` or
+  /// `sender_full` — the last when a player has already written
+  /// `maxEntriesPerOwner` entries into other owners' namespaces.
   bool get isFull =>
-      isConflict && (reason == 'collection_full' || reason == 'owner_full');
+      isConflict &&
+      (reason == 'collection_full' ||
+          reason == 'owner_full' ||
+          reason == 'sender_full');
+
+  /// `409` with `details.reason` `exists`: a write into another player's
+  /// namespace is create-only, and that key is already there. Nobody else can
+  /// send under your prefix, so it is normally your own earlier send (the
+  /// owner or the server may also have put it there).
+  bool get isKeyTaken => isConflict && reason == 'exists';
+
+  /// `409` with `details.reason` `out_of_range`: `incr` would have left the
+  /// counter outside the `min`/`max` it was given, and nothing was written.
+  /// The server's `details.value` (the stored number) is not carried; read
+  /// it with `get`.
+  bool get isOutOfRange => isConflict && reason == 'out_of_range';
 
   /// `404`: no such collection in the caller's project, or no such key.
   bool get isNotFound => status == 404;

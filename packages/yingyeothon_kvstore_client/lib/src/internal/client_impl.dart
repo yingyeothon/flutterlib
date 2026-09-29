@@ -1,7 +1,10 @@
 import 'package:http/http.dart' as http;
+import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 
+import '../errors.dart';
 import '../kvstore_client.dart';
+import '../paths.dart';
 import 'collection_impl.dart';
 import 'requester.dart';
 
@@ -22,6 +25,8 @@ final class KvStoreClientImpl implements KvStoreClient {
   static const Duration defaultTimeout = Duration(seconds: 15);
 
   final KvRequester _requester;
+
+  static const int _maxEpochMs = 8640000000000000;
 
   static Uri _checkBaseUrl(Uri url) {
     if ((url.scheme == 'https' || url.scheme == 'http') &&
@@ -55,6 +60,28 @@ final class KvStoreClientImpl implements KvStoreClient {
   @override
   KvCollection collection(String nameOrId) =>
       KvCollectionImpl(_requester, nameOrId);
+
+  @override
+  Future<DateTime> serverTime() async {
+    final answer = await _requester.send(
+      'GET',
+      KvRoute.time,
+      KvPaths.time,
+      authorized: false,
+    );
+    final decoded = Json.tryDecode(answer.body);
+    final value = decoded is JsonDecoded ? decoded.value : null;
+    final epochMs = value is JsonObject ? value.getInt('epochMs') : null;
+    // `DateTime`'s own range; past it the constructor throws a message that
+    // quotes the number.
+    if (epochMs == null || epochMs <= 0 || epochMs > _maxEpochMs) {
+      throw KvStoreException(
+        answer.status,
+        KvStoreException.malformedResponseCode,
+      );
+    }
+    return DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true);
+  }
 
   @override
   void close() => _requester.close();

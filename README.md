@@ -37,7 +37,7 @@ handle it.
 | [Console and options](docs/console-and-options.md) | what the console hands you, and every option |
 | [Authentication](docs/authentication.md) | how a client gets its channel JWT |
 | [Lobby](docs/lobby.md) / [Dungeon](docs/dungeon.md) | the two channel kinds, feature by feature |
-| [Key-value store](docs/kvstore.md) | announcements and a player's own record, with the same token |
+| [Key-value store](docs/kvstore.md) | announcements, a player's own record, mail and the platform clock, with the same token |
 | [Asset bundles](docs/assets.md) | game files from the CDN, encrypted or not: a manifest, a range, a resumable download |
 | [Connection lifecycle](docs/connection-lifecycle.md) | states, events, reconnect, backoff |
 | [Errors](docs/errors.md) / [Troubleshooting](docs/troubleshooting.md) | every refusal, close code and symptom |
@@ -53,7 +53,7 @@ handle it.
 | [yingyeothon_event_broker](packages/yingyeothon_event_broker) | Type-keyed asynchronous event broker |
 | [yingyeothon_gamebase_client](packages/yingyeothon_gamebase_client) | Client SDK for the yyt realtime gateway (lobby + dungeon `q`) |
 | [yingyeothon_auth_client](packages/yingyeothon_auth_client) | The client half of the auth channel: config, sign-in URL, redirect, exchange, verify |
-| [yingyeothon_kvstore_client](packages/yingyeothon_kvstore_client) | Client for the yyt key-value store: collections by name, `me` namespace, versions, TTL, `incr` |
+| [yingyeothon_kvstore_client](packages/yingyeothon_kvstore_client) | Client for the yyt key-value store: collections by name, `me` namespace, versions, TTL, `incr`, mail, `serverTime` |
 | [yingyeothon_asset_client](packages/yingyeothon_asset_client) | Reader for asset bundles on the CDN: whole files, JSON, ranges, resumable downloads; decrypts and verifies `yyt-enc v1` |
 | [yingyeothon_fake_gateway](packages/yingyeothon_fake_gateway) | In-process gateway for tests and the offline demo; never published |
 
@@ -86,7 +86,8 @@ Flutter app signs in through a browser redirect and the parsing is easy to get
 wrong, and `yingyeothon_fake_gateway`, so the SDK is tested end to end and the example
 runs with no credential. `yingyeothon_kvstore_client` and `yingyeothon_asset_client`
 are the Dart ports of tslib's `kvstore-client` and `asset-client`, with the same shape
-and vocabulary in every language that has them.
+and vocabulary in every language that has them; the key-value client is ahead of both
+on the service's 2026-09-09 additions (its README says which).
 
 ## Install
 

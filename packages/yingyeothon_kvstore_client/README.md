@@ -97,36 +97,54 @@ such key". Two tiers:
   (`null` = the key is absent), the last two only for a reader.
 - `ttl` is seconds, 1 s to 366 days; `0` clears the expiry, omitted keeps it.
   `expiresAt` is an absolute epoch second and is sent only when *that* write set it.
-- `incr(key, delta)` is the server's atomic counter; it takes no conditions and needs
-  the read right.
+- `incr(key, delta, min:, max:)` is the server's atomic counter; it takes no
+  conditions and needs the read right. `min` and `max` bound the result of that one
+  call (nothing stores them); a result outside them writes nothing and is
+  `isOutOfRange`.
+
+## Owner namespaces, mail and the clock
+
+Either scope `user` puts the entries under `/u/{ownerId}` (`isUserNamespace`); there
+`KvEntry.from` / `KvListEntry.from` name the writer. `acceptsMail` collections take a
+player's create-only `owner(id).put`, and `serverTime()` reads the platform clock.
+The rules and the pitfalls are in the guide:
+[Mail and the writer stamp](../../docs/kvstore.md#mail-and-the-writer-stamp),
+[The platform clock](../../docs/kvstore.md#the-platform-clock).
 
 ## Local refusals
 
 Only what the server would refuse, thrown as `ArgumentError` before any request: the
 key grammar, the collection name grammar, the owner grammar, a value over 16 KiB of
 UTF-8, `ttl` and `limit` out of range, an `ifMatch` below 1 (there is no version 0;
-create with `ifNoneMatch`), `ifMatch` with `ifNoneMatch`. The message
+create with `ifNoneMatch`), `ifMatch` with `ifNoneMatch`, an `incr` `min` over its
+`max`. The mail key prefix is not checked here: the client does not know your user
+id. The message
 names the rule, never the input. The constants are in `KvRules`, cited to the server.
 
 ## Failures
 
 `KvStoreException` for anything the server or the network refused: `isConflict`
 (every 409), `isVersionMismatch` (a 409 without a `reason`), `isFull` (409 with
-`reason` `collection_full` or `owner_full`), `isForbidden` (403), `isUnauthorized`
-(401), `isNotFound` (404); `reason` also carries `not_a_number`, `overflow` and
-`wrong_namespace`. `status` `0` with `code` `network` is a timeout or
+`reason` `collection_full`, `owner_full` or `sender_full`), `isKeyTaken` (409
+`exists`, a mail key already there), `isOutOfRange` (409 `out_of_range`),
+`isForbidden` (403), `isUnauthorized` (401), `isNotFound` (404); `reason` also
+carries `not_a_number`, `overflow` and `wrong_namespace`. The server's
+`details.value` on `out_of_range` is a stored value and is not carried; read it with
+`get`. `status` `0` with `code` `network` is a timeout or
 a connection failure; `malformed_response` (with the answer's status) is a body or an
 `ETag` the server promised and did not send, or a body over 4 MiB. `toString()` is
 `KvStoreException(code, status)` and nothing else.
 
 ## Public API
 
-- `KvStoreClient` (`collection`, `close`), `KvStoreClientOptions` (`baseUrl`,
-  `token`, `client`, `logger`, `timeout`).
+- `KvStoreClient` (`collection`, `serverTime`, `close`), `KvStoreClientOptions`
+  (`baseUrl`, `token`, `client`, `logger`, `timeout`).
 - `KvCollection` (`ref`, `info`, `mine`, `owner`), `KvNamespace` (`get`, `getEntry`,
   `put`, `delete`, `list`, `incr`).
-- `KvCollectionInfo`, `KvEntry`, `KvWriteResult`, `KvListEntry`, `KvPage`,
-  `KvIncrResult`, `KvOrder`, `KvScope` (`team`, `project`, `user` as strings).
+- `KvCollectionInfo` (with `isUserNamespace`, `acceptsMail`), `KvEntry` (with
+  `from`, `updatedAt`), `KvWriteResult`, `KvListEntry` (with `from`), `KvPage`,
+  `KvIncrResult`, `KvOrder`, `KvScope` (`team`, `server`, `project`, `user` as
+  strings).
 - `KvStoreException` (`status`, `code`, `reason`, `currentVersion`,
   `hasCurrentVersion`, the `is…` predicates, and the parsers `fromResponse`,
   `parseEtagVersion`, `parseExpiresAt`), `KvRules` (the server's grammars and
@@ -143,6 +161,10 @@ a connection failure; `malformed_response` (with the answer's status) is a body 
   it; tslib has no lifetime because `fetch` has none.
 - **`KvListEntry.hasValue`** says whether the server sent a value, because a stored
   `null` and "no value requested" are both `null` in `value`.
+- **Ahead of both, as of 2026-09-30:** the `server` scope, the owner namespace of
+  either scope `user`, mail and its writer stamp, `incr` bounds and `serverTime()`
+  (the service's kv additions of 2026-09-09) are here and not yet in either
+  original.
 
 ## What this does not do
 

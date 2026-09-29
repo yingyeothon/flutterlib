@@ -22,6 +22,9 @@ enum KvRoute {
 
   /// `PATCH …/entries/{key}`.
   incr,
+
+  /// `GET /time`, sent without the token.
+  time,
 }
 
 /// A 2xx answer: the status, the headers (lower-cased names) and the body.
@@ -44,6 +47,16 @@ final class KvAnswer {
   /// The absolute second from `X-KV-Expires-At`, or `null`.
   int? get expiresAt =>
       KvStoreException.parseExpiresAt(headers['x-kv-expires-at']);
+
+  /// The writer stamp from `X-KV-From`, kept exactly; `null` when absent or
+  /// empty.
+  String? get from {
+    final raw = headers['x-kv-from'];
+    return raw == null || raw.isEmpty ? null : raw;
+  }
+
+  /// The write's epoch second from `X-KV-At`, or `null`.
+  int? get updatedAt => KvStoreException.parseExpiresAt(headers['x-kv-at']);
 }
 
 /// The single request choke point: one header assembly, one place the token
@@ -90,7 +103,8 @@ final class KvRequester {
   }
 
   /// Sends one request and returns its 2xx answer; a refusal is a
-  /// [KvStoreException].
+  /// [KvStoreException]. [authorized] `false` leaves the token off, for the
+  /// one route that belongs to nobody (`GET /time`).
   Future<KvAnswer> send(
     String method,
     KvRoute route,
@@ -98,6 +112,7 @@ final class KvRequester {
     Map<String, String> query = const <String, String>{},
     Map<String, String> headers = const <String, String>{},
     String? body,
+    bool authorized = true,
   }) async {
     // Abortable, so a deadline releases the socket instead of leaving the
     // body buffering into a builder nobody reads.
@@ -108,9 +123,9 @@ final class KvRequester {
             KvPaths.resolve(_baseUrl, segments, query),
             abortTrigger: abort.future,
           )
-          ..headers['authorization'] = _authorization
           ..headers['accept'] = 'application/json'
           ..headers.addAll(headers);
+    if (authorized) request.headers['authorization'] = _authorization;
     if (body != null) {
       // Body first: the setter would append a charset to a content type set
       // before it, and the header is pinned by a test.

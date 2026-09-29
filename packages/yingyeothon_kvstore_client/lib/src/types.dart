@@ -7,6 +7,11 @@ abstract final class KvScope {
   /// Console and CLI only; the API answers `403`.
   static const String team = 'team';
 
+  /// The auth channel's doc apiKey (and the console); a player's token is a
+  /// `403`. For a game server, a Lambda or a cron — never for a key shipped
+  /// inside an app build.
+  static const String server = 'server';
+
   /// Any credential of the collection's project.
   static const String project = 'project';
 
@@ -59,8 +64,7 @@ final class KvCollectionInfo {
   /// Who may read: a [KvScope] value.
   final String readScope;
 
-  /// Who may write: a [KvScope] value. `user` puts every entry in an owner
-  /// namespace.
+  /// Who may write: a [KvScope] value.
   final String writeScope;
 
   /// Whether values are stored encrypted.
@@ -72,19 +76,33 @@ final class KvCollectionInfo {
   /// Entries one owner may hold.
   final int maxEntriesPerOwner;
 
-  /// Whether `writeScope` is `user`, which is what puts every entry under
+  /// Whether either scope is `user`, which is what puts every entry under
   /// `/u/{ownerId}` (the `mine` and `owner()` namespaces) rather than the
   /// shared `entries` path.
-  bool get isUserNamespace => writeScope == KvScope.user;
+  bool get isUserNamespace =>
+      readScope == KvScope.user || writeScope == KvScope.user;
+
+  /// Whether a player may write into another player's namespace: `readScope`
+  /// `user` with `writeScope` `project`. Such a write is create-only and its
+  /// key starts with the writer's own id and a colon (`KvCollection.owner`).
+  bool get acceptsMail =>
+      readScope == KvScope.user && writeScope == KvScope.project;
 
   /// The object as received.
   final JsonObject raw;
 }
 
-/// One stored entry with its version and expiry.
+/// One stored entry with its version, its expiry and, in an owner
+/// namespace, who wrote it.
 final class KvEntry {
   /// Creates an entry.
-  const KvEntry({required this.value, required this.version, this.expiresAt});
+  const KvEntry({
+    required this.value,
+    required this.version,
+    this.expiresAt,
+    this.from,
+    this.updatedAt,
+  });
 
   /// The stored JSON value, decoded. A stored `null` is `null` here.
   final Object? value;
@@ -95,6 +113,17 @@ final class KvEntry {
   /// Absolute epoch second from `X-KV-Expires-At`; `null` when the entry never
   /// expires.
   final int? expiresAt;
+
+  /// Who last wrote the entry, from `X-KV-From`: the writer's user id (32 hex
+  /// or `{kind}:{id}`), `server` for the doc apiKey or `team` for the
+  /// console. Stamped by the platform, never by the writer, and only in an
+  /// owner namespace; `null` in a shared one, on a row written before stamps
+  /// existed, and for a writer whose token subject is not a user id.
+  final String? from;
+
+  /// Epoch second of the last write, from `X-KV-At` (the row's `updatedAt`,
+  /// as in [KvListEntry.updatedAt]); sent with [from].
+  final int? updatedAt;
 }
 
 /// What a `put` learned. [created] and [version] are `null` for a caller
@@ -124,6 +153,7 @@ final class KvListEntry {
     required this.updatedAt,
     required this.hasValue,
     this.owner,
+    this.from,
     this.expiresAt,
     this.value,
     required this.raw,
@@ -131,6 +161,9 @@ final class KvListEntry {
 
   /// The owner, present only in a user namespace.
   final String? owner;
+
+  /// Who last wrote the row, as [KvEntry.from]; only in a user namespace.
+  final String? from;
 
   /// The key.
   final String key;

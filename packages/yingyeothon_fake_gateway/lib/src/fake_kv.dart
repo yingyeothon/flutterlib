@@ -26,10 +26,12 @@ final class FakeKvCollection {
   /// The `kv_` id; `null` derives one from the name.
   final String? id;
 
-  /// `team`, `project` or `user`.
+  /// `team`, `server`, `project` or `user`.
   final String readScope;
 
-  /// `team`, `project` or `user`; `user` puts entries under `/u/{owner}`.
+  /// `team`, `server`, `project` or `user`. Either scope `user` puts entries
+  /// under `/u/{owner}`; `readScope` `user` with `writeScope` `project` lets
+  /// a player write into another owner's namespace (mail).
   final String writeScope;
 
   /// Reported in the meta; values are stored in the clear regardless.
@@ -47,8 +49,8 @@ final class FakeKvCollection {
   /// Seed values per owner for a user namespace.
   final Map<String, Map<String, Object?>> ownerEntries;
 
-  /// Whether entries live under `/u/{owner}`.
-  bool get isUserNamespace => writeScope == 'user';
+  /// Whether entries live under `/u/{owner}`: either scope is `user`.
+  bool get isUserNamespace => readScope == 'user' || writeScope == 'user';
 
   /// [id], or one derived from [name] in the `kv_` shape.
   String get effectiveId {
@@ -71,6 +73,9 @@ final class _Row {
   int? expiresAt;
   int at;
 
+  /// The writer stamp: `server`, a player's id, or `null` for a seed row.
+  String? from;
+
   bool live(int now) => expiresAt == null || expiresAt! > now;
 }
 
@@ -87,6 +92,11 @@ final class _Collection {
 
   int liveCount(int now, {String? owner}) => rows.values
       .where((r) => r.live(now) && (owner == null || r.owner == owner))
+      .length;
+
+  /// Live rows [from] wrote into namespaces other than its own.
+  int sentCount(int now, String from) => rows.values
+      .where((r) => r.live(now) && r.from == from && r.owner != from)
       .length;
 }
 
@@ -106,11 +116,14 @@ final class _Refusal implements Exception {
   final JsonObject? details;
 }
 
-/// The in-memory key-value store behind `/kv/*` on the fake gateway. It
-/// answers the way `services/state` does for the cases a client library
-/// needs: scopes, both namespaces, versions, conditional writes, TTL,
-/// `incr`, listing with a cursor, and the documented refusals. Values are
-/// never encrypted; `encrypted` is metadata only.
+/// The in-memory key-value store behind `/kv/*` (and the clock at `/time`)
+/// on the fake gateway. It answers the way `services/state` does for the
+/// cases a client library needs: scopes, both namespaces, versions,
+/// conditional writes, TTL, `incr` with its bounds, mail and the writer
+/// stamp, listing with a cursor, and the documented refusals. Values are
+/// never encrypted; `encrypted` is metadata only. A player's stamp is its
+/// token's user id, which here is any plain segment (`alice`), so the
+/// server's owner-id grammar on a mail writer is not enforced.
 final class FakeKvStore {
   /// Creates a store serving [collections].
   FakeKvStore(
@@ -181,7 +194,11 @@ final class FakeKvStore {
   }
 
   /// Whether [path] is one this store serves.
-  static bool handles(String path) => path == '/kv' || path.startsWith('/kv/');
+  static bool handles(String path) =>
+      path == '/kv' ||
+      path.startsWith('/kv/') ||
+      path == '/time' ||
+      path == '/time/';
 
   /// Answers one request.
   Future<void> handle(HttpRequest request) async {
@@ -213,6 +230,17 @@ final class FakeKvStore {
   }
 
   _Result _dispatch(HttpRequest request, String body) {
+    // The platform clock belongs to nobody: no token, no collection.
+    if (request.uri.path == '/time' || request.uri.path == '/time/') {
+      if (request.method != 'GET') {
+        throw _Refusal(405, 'method_not_allowed', request.method);
+      }
+      final at = DateTime.now().toUtc();
+      return _Result.json(200, <String, Object?>{
+        'now': at.toIso8601String(),
+        'epochMs': at.millisecondsSinceEpoch,
+      });
+    }
     final caller = _authenticate(request);
     final segments = request.uri.pathSegments
         .where((s) => s.isNotEmpty)
@@ -226,7 +254,7 @@ final class FakeKvStore {
     final method = request.method;
     if (rest.isEmpty) {
       if (method != 'GET') throw _Refusal(405, 'method_not_allowed', method);
-      return _meta(col);
+      return _meta(col, caller);
     }
     final String? owner;
     final List<String> tail;
@@ -329,10 +357,12 @@ final class FakeKvStore {
     <String, Object?>{'reason': 'wrong_namespace'},
   );
 
-  /// The scope matrix: `team` refuses every API principal, `project` admits
-  /// any, `user` admits the server and the owner of the target.
+  /// The scope matrix: `team` refuses every API principal, `server` admits
+  /// the doc apiKey only, `project` admits any, `user` admits the server and
+  /// the owner of the target.
   static bool _allows(String scope, _Caller caller, String? targetOwner) {
     if (scope == 'team') return false;
+    if (scope == 'server') return caller.isServer;
     if (scope == 'project') return true;
     if (caller.isServer) return true;
     return targetOwner != null && targetOwner == caller.userId;
@@ -353,12 +383,34 @@ final class FakeKvStore {
     }
   }
 
+  /// The writer's id when a player writes into **another** owner's
+  /// namespace (mail); `null` for every other write, a server key's
+  /// included.
+  static String? _mailFrom(_Collection col, _Caller caller, String owner) {
+    if (caller.isServer || !col.spec.isUserNamespace) return null;
+    return owner == caller.userId ? null : caller.userId;
+  }
+
+  static _Refusal _crossOwner() => _Refusal(
+    403,
+    'forbidden',
+    'only the owner may overwrite or delete in its own namespace',
+  );
+
+  /// What the platform records as the writer.
+  static String _stampOf(_Caller caller) =>
+      caller.isServer ? 'server' : caller.userId;
+
   // ---- routes -------------------------------------------------------------
 
-  _Result _meta(_Collection col) {
+  /// The shape, unless this caller could touch no entry either way: both
+  /// scopes `team` for anyone, both scopes in `team`/`server` for a player.
+  _Result _meta(_Collection col, _Caller caller) {
     final spec = col.spec;
-    if (spec.readScope == 'team' && spec.writeScope == 'team') {
-      throw _Refusal(403, 'forbidden', 'team only');
+    bool unreachable(String scope) =>
+        scope == 'team' || (scope == 'server' && !caller.isServer);
+    if (unreachable(spec.readScope) && unreachable(spec.writeScope)) {
+      throw _Refusal(403, 'forbidden', 'no entry is reachable');
     }
     return _Result.json(200, <String, Object?>{
       'id': spec.effectiveId,
@@ -425,6 +477,7 @@ final class FakeKvStore {
         for (final r in page)
           <String, Object?>{
             if (col.spec.isUserNamespace) 'owner': r.owner,
+            if (col.spec.isUserNamespace && r.from != null) 'from': r.from,
             'key': r.key,
             'version': r.version,
             'bytes': utf8.encode(r.text).length,
@@ -443,9 +496,12 @@ final class FakeKvStore {
     if (row == null || !row.live(_now())) {
       throw _Refusal(404, 'not_found', 'entry not found');
     }
+    final stamped = col.spec.isUserNamespace && row.from != null;
     return _Result(200, row.text, <String, String>{
       'etag': '"${row.version}"',
       'x-kv-expires-at': ?row.expiresAt?.toString(),
+      if (stamped) 'x-kv-from': row.from!,
+      if (stamped) 'x-kv-at': '${row.at}',
     });
   }
 
@@ -488,16 +544,27 @@ final class FakeKvStore {
         if (reason == null && mayRead) 'current': current?.version,
       });
 
-  /// Caps are counted on create only; the per-owner cap bounds a player, not
-  /// the server key.
-  void _requireRoom(_Collection col, _Caller caller, String owner, int now) {
-    if (col.liveCount(now) >= col.spec.maxEntries) {
-      throw _conflict(null, false, reason: 'collection_full');
-    }
+  /// Caps are counted on create only, in the server's order: the owner, the
+  /// mail sender, the collection. The per-owner cap bounds a player, not the
+  /// server key; a mail writer is also bounded by what it has sent.
+  void _requireRoom(
+    _Collection col,
+    _Caller caller,
+    String owner,
+    int now, {
+    String? mailFrom,
+  }) {
     if (col.spec.isUserNamespace &&
         !caller.isServer &&
         col.liveCount(now, owner: owner) >= col.spec.maxEntriesPerOwner) {
       throw _conflict(null, false, reason: 'owner_full');
+    }
+    if (mailFrom != null &&
+        col.sentCount(now, mailFrom) >= col.spec.maxEntriesPerOwner) {
+      throw _conflict(null, false, reason: 'sender_full');
+    }
+    if (col.liveCount(now) >= col.spec.maxEntries) {
+      throw _conflict(null, false, reason: 'collection_full');
     }
   }
 
@@ -513,6 +580,7 @@ final class FakeKvStore {
     String text,
     Object? ttl,
     int now,
+    _Caller caller,
   ) {
     final _Row row;
     if (existing == null) {
@@ -526,6 +594,8 @@ final class FakeKvStore {
       if (!wasLive) row.expiresAt = null;
     }
     if (!identical(ttl, _keep)) row.expiresAt = ttl as int?;
+    // Re-stamped by every accepted write.
+    row.from = _stampOf(caller);
     return row;
   }
 
@@ -539,6 +609,24 @@ final class FakeKvStore {
   ) {
     _requireWrite(col, caller, owner);
     final mayRead = _mayRead(col, caller, owner);
+    final mailFrom = _mailFrom(col, caller, owner);
+    if (mailFrom != null) {
+      if (request.headers.value('if-match') != null ||
+          request.headers.value('if-none-match') != null) {
+        throw _Refusal(
+          400,
+          'bad_request',
+          "a write into another owner's namespace is always create-only",
+        );
+      }
+      if (!key.startsWith('$mailFrom:')) {
+        throw _Refusal(
+          400,
+          'bad_request',
+          'a mail key must start with your own id and a colon',
+        );
+      }
+    }
     final ifMatch = _ifMatch(request);
     final ifNoneMatch = _ifNoneMatch(request);
     if (ifMatch != null && ifNoneMatch) {
@@ -561,12 +649,27 @@ final class FakeKvStore {
     final ttl = _ttlOf(request, now);
     final existing = col.find(owner, key);
     final live = existing != null && existing.live(now) ? existing : null;
+    if (mailFrom != null && live != null) {
+      throw _conflict(null, false, reason: 'exists');
+    }
     if (ifNoneMatch && live != null) throw _conflict(live, mayRead);
     if (ifMatch != null && (live == null || live.version != ifMatch)) {
       throw _conflict(live, mayRead);
     }
-    if (live == null) _requireRoom(col, caller, owner, now);
-    final row = _write(col, existing, live != null, owner, key, body, ttl, now);
+    if (live == null) {
+      _requireRoom(col, caller, owner, now, mailFrom: mailFrom);
+    }
+    final row = _write(
+      col,
+      existing,
+      live != null,
+      owner,
+      key,
+      body,
+      ttl,
+      now,
+      caller,
+    );
     final created = live == null;
     return _Result(mayRead && created ? 201 : 204, null, <String, String>{
       if (mayRead) 'etag': '"${row.version}"',
@@ -583,6 +686,8 @@ final class FakeKvStore {
     String key,
   ) {
     _requireWrite(col, caller, owner);
+    // An overwrite, and mail is create-only.
+    if (_mailFrom(col, caller, owner) != null) throw _crossOwner();
     _requireRead(col, caller, owner);
     if (request.headers.value('if-match') != null ||
         request.headers.value('if-none-match') != null) {
@@ -600,6 +705,20 @@ final class FakeKvStore {
     if (incr == null || incr.abs() > _maxSafeInteger) {
       throw _Refusal(400, 'bad_request', 'incr must be a safe integer');
     }
+    int? bound(String name) {
+      if (value is! JsonObject || !value.has(name)) return null;
+      final v = value.getInt(name);
+      if (v == null || v.abs() > _maxSafeInteger) {
+        throw _Refusal(400, 'bad_request', '$name must be a safe integer');
+      }
+      return v;
+    }
+
+    final min = bound('min');
+    final max = bound('max');
+    if (min != null && max != null && min > max) {
+      throw _Refusal(400, 'bad_request', 'min must not be greater than max');
+    }
     final existing = col.find(owner, key);
     final live = existing != null && existing.live(now) ? existing : null;
     var base = 0;
@@ -615,6 +734,15 @@ final class FakeKvStore {
     if (next.abs() > _maxSafeInteger) {
       throw _conflict(null, true, reason: 'overflow');
     }
+    if ((min != null && next < min) || (max != null && next > max)) {
+      // `value`, the stored number: `current` means a version everywhere.
+      throw _Refusal(
+        409,
+        'conflict',
+        'the result is outside min/max',
+        <String, Object?>{'reason': 'out_of_range', 'value': base},
+      );
+    }
     if (live == null) _requireRoom(col, caller, owner, now);
     final row = _write(
       col,
@@ -625,6 +753,7 @@ final class FakeKvStore {
       '$next',
       ttl,
       now,
+      caller,
     );
     return _Result(
       200,
@@ -644,6 +773,8 @@ final class FakeKvStore {
     String key,
   ) {
     _requireWrite(col, caller, owner);
+    // Mail is create-only in both directions.
+    if (_mailFrom(col, caller, owner) != null) throw _crossOwner();
     final mayRead = _mayRead(col, caller, owner);
     final ifMatch = _ifMatch(request);
     if (ifMatch != null && !mayRead) {

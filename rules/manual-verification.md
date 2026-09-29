@@ -175,6 +175,8 @@ yyt asset key show <throwaway>-assets > <scratch>/key.txt   # stdout only; never
 mkdir -p <scratch>/bundle && printf '{"v":1}' > <scratch>/bundle/manifest.json \
   && head -c 200000 /dev/urandom > <scratch>/bundle/big.bin
 yyt asset sync <throwaway>-assets <scratch>/bundle --mutable manifest.json
+# a line starting `rate_limited:` means the CLI's own retries ran out: wait 10 s and
+# rerun (a rerun skips uploaded files); stop after 3 reruns and report it
 yyt asset files <throwaway>-assets   # the URL column; <bundleId> follows /assets/
 (cd packages/yingyeothon_asset_client && \
   YYT_ASSET_BASE_URL=https://dev-d.yyt.life/assets/<bundleId>/ \
