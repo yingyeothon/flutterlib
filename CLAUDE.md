@@ -10,8 +10,8 @@
 - Eight packages in one pub workspace: `codec`, `logger`, `event_broker`,
   `gamebase_client` (the gateway SDK), `auth_client`, `kvstore_client` (the key-value
   store client), `asset_client` (the CDN asset-bundle reader), and `fake_gateway` (an
-  in-process gateway and `/kv/*` store for tests and the offline demo; never
-  published).
+  in-process gateway, `/kv/*` store and `/assets/*` CDN for tests and the offline
+  demo; never published).
 - Source of truth documents:
   - `CONVENTIONS.md` — Dart API design rules. Canonical; do not restate or contradict.
   - `README.md` — what the library is for, the package list and the dependency graph.

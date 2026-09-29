@@ -39,6 +39,11 @@ process and connects the SDK to it over the real transport. Walk the change:
   request` lines with a route kind and a status and never a key or the token (the
   offline token is `you`, which is also the user id, so look for `Bearer` rather
   than for the token text; `kv_screen_test.dart` does the same).
+- Login → **Asset bundle** (enabled without sign-in): the first line reads `An
+  encrypted bundle: every 64 KiB segment is verified…`, the manifest card shows `{"v":1,"files":["hello.txt","big.bin"]}`, *Read*
+  shows `Hello from an encrypted asset bundle.`, *Download* fills the bar and ends
+  at `Downloaded 300000 bytes`; the log panel shows `asset request` lines and never
+  the key (it is random per demo, so look for `yak1.` and for a long base64url run).
 - `flutter run -d linux --release`: the Offline demo button and the Debug drawer are
   absent.
 
@@ -49,7 +54,7 @@ package:
 
 | Hook | What it does |
 | --- | --- |
-| Offline demo | starts the fake gateway (lobby, `q` and `/kv/*`), fills the config with its URLs and a plain token |
+| Offline demo | starts the fake gateway (lobby, `q`, `/kv/*` and an encrypted bundle under `/assets/*` with a key made at start), fills the config with its URLs, that key and a plain token |
 | Seed 3 peers | connects three raw sockets to the fake as `seed-1..3` and moves them every 400 ms |
 | Force close *code* | asks the fake to close your lobby socket with `4000`, `4002`, `4004`, `4005` or `1001` |
 | Abort (4001) / Finish (1000) | closes your `q` socket with that code (dungeon screen) |
@@ -173,7 +178,8 @@ key-value section (reuse them; a bundle that already exists is reused too):
 yyt asset create <throwaway>-assets --mode live --encrypted
 yyt asset key show <throwaway>-assets > <scratch>/key.txt   # stdout only; never echo it
 mkdir -p <scratch>/bundle && printf '{"v":1}' > <scratch>/bundle/manifest.json \
-  && head -c 200000 /dev/urandom > <scratch>/bundle/big.bin
+  && head -c 200000 /dev/urandom > <scratch>/bundle/big.bin \
+  && printf 'hello' > <scratch>/bundle/hello.txt   # the example screen reads it
 yyt asset sync <throwaway>-assets <scratch>/bundle --mutable manifest.json
 # a line starting `rate_limited:` means the CLI's own retries ran out: wait 10 s and
 # rerun (a rerun skips uploaded files); stop after 3 reruns and report it
@@ -189,9 +195,12 @@ Then write `{"v":2}` into `manifest.json`, sync again, and rerun with
 delete <throwaway>-assets` and `rm <scratch>/key.txt`; record `Verified: dev assets,
 dev_test (v1, then v2)`.
 
-Two checks stay with the owner until the playground reads a bundle: the same reads
-in a browser (`corsSafe` against the real CDN's CORS rules; `dev_test.dart` reads
-the environment through `dart:io` and cannot run there), and a resumed download of a
+Two checks stay with the owner; an agent does not attempt them and names them in a
+`Not run:` line of the commit. First, the same reads in a browser: the playground's
+**Asset bundle** screen on `flutter run -d chrome`, configured as
+`examples/playground/README.md` says, against a bundle built as in the recipe above
+(`corsSafe` against the real CDN's CORS rules; `dev_test.dart` reads the
+environment through `dart:io` and cannot run there). Second, a resumed download of a
 file over the 2 MiB default `asset.fileBytes`, which needs a platform admin to raise
 the limit and a phone to kill mid-download.
 

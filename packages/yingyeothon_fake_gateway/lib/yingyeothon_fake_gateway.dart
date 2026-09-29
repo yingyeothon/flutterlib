@@ -6,7 +6,8 @@
 /// events by scope, parties with the gateway's `omitempty` marshalling,
 /// `ping`/`pong`, the documented refusal codes, and the close codes a test
 /// injects, plus the state stack's `/kv/*` routes over an in-memory store
-/// for the key-value client, and on request the failures a client must
+/// for the key-value client and a CDN for asset bundles under `/assets/*`,
+/// and on request the failures a client must
 /// survive (see the README). It is not the gateway: no rate limiting, no
 /// `aoi.range` box or per-receiver view, no persistence beyond the process,
 /// no real token verification — a token is accepted as an identity, and its
@@ -16,6 +17,8 @@
 /// Never publish this package; it is `publish_to: none`.
 library;
 
+export 'src/asset_encryption.dart' show assetKeyText, encryptAsset;
+export 'src/fake_assets.dart' show FakeAssetBundle;
 export 'src/fake_gateway.dart'
     show FakeGateway, FakeGatewayOptions, GameFrameHandler, GameSession;
 export 'src/fake_kv.dart' show FakeKvCollection, FakeKvStore;

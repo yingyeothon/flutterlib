@@ -6,6 +6,11 @@ resolution: workspace
 environment:
   sdk: ^3.13.0
 dependencies:
+  # The asset encryptor (asset_encryption.dart): HMAC and HKDF from crypto,
+  # CTR from pointycastle; only the AES block cipher is shared with
+  # yingyeothon_asset_client.
+  crypto: ^3.0.6
+  pointycastle: ^3.9.1
   yingyeothon_codec:
     path: ../yingyeothon_codec
 dev_dependencies:

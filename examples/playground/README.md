@@ -2,8 +2,8 @@
 
 One Flutter app that exercises every package: sign in through the auth channel (or
 paste a token), join a lobby (zone map, chat, parties), run a dungeon `q` session,
-watch the reconnect and stop banners, and read announcements and save your settings
-in the key-value store. In a debug build an **Offline demo** starts
+watch the reconnect and stop banners, read announcements and save your settings in
+the key-value store, and read and download files of an encrypted asset bundle. In a debug build an **Offline demo** starts
 `yingyeothon_fake_gateway` in the process, so all of it runs with no credential and no
 network.
 
@@ -25,8 +25,8 @@ which is why that line is already there). The offline demo is not available on w
 
 ## Configure
 
-Five `--dart-define`s, all optional; the login screen lets you edit them (in memory
-only, nothing is persisted):
+Seven `--dart-define`s, all optional; the login screen lets you edit all but the
+asset key (in memory only, nothing is persisted):
 
 ```bash
 flutter run -d linux \
@@ -34,12 +34,24 @@ flutter run -d linux \
   --dart-define=YYT_CHANNEL_ID=lobby_0123456789abcdef \
   --dart-define=YYT_AUTH_BASE_URL=https://auth.yyt.life \
   --dart-define=YYT_AUTH_CHANNEL_ID=auth_0123456789abcdef \
-  --dart-define=YYT_KV_BASE_URL=https://doc.yyt.life
+  --dart-define=YYT_KV_BASE_URL=https://doc.yyt.life \
+  --dart-define=YYT_ASSET_BASE_URL=https://d.yyt.life/assets/ab_…/ \
+  --dart-define=YYT_ASSET_KEY=yak1.…
 ```
 
 The **Key-value store** screen expects two collections in your project, created in
 the console: `announcements` (readScope `project`, writeScope `team`) and `profile`
 (readScope `user`, writeScope `user`). The offline demo seeds both.
+
+The **Asset bundle** screen reads `manifest.json`, reads `hello.txt` whole and
+downloads `big.bin` with progress, from the bundle at `YYT_ASSET_BASE_URL`; sync those
+three files into it with `yyt asset sync` (any content; [Asset bundles](../../docs/assets.md)
+covers `yyt asset create --encrypted` and `--mutable manifest.json`). `YYT_ASSET_KEY` is the bundle's key (`yyt
+asset key show`), empty for a plain bundle; it ships inside the app by design and
+never goes into this repository: pass it with `--dart-define-from-file=local/assets.json`
+(`local/` is refused by the git hooks) rather than on a command line your shell
+history keeps. It needs no sign-in. The offline demo serves an
+encrypted bundle under a key it makes at start.
 
 Sign in with **GitHub** or **Google**: the app opens the browser with the redirect
 URL from the login screen (default `http://localhost/signin`, **which must be on the
@@ -94,7 +106,7 @@ a time for the same reason, and *Seed peers* seeds them once per demo.
 
 | Where | Hook | Effect |
 | --- | --- | --- |
-| Login | Offline demo | starts the fake gateway (lobby, `q` and `/kv/*`), fills the config, signs you in as `you` |
+| Login | Offline demo | starts the fake gateway (lobby, `q`, `/kv/*` and an encrypted bundle under `/assets/*`), fills the config, signs you in as `you` |
 | Lobby → debug drawer | Seed peers | three extra identities join your zone and wander |
 | Lobby → debug drawer | Force close 4000 / 4002 / 4004 / 4005 / 1001 | the fake closes your socket with that code |
 | Dungeon | Abort (4001) / Finish (1000) | the fake closes your `q` socket |
@@ -112,11 +124,11 @@ A `--release` build has none of these.
 ```
 lib/
   main.dart            app + routes
-  config.dart          the five dart-defines
+  config.dart          the seven dart-defines
   session.dart         ChangeNotifier owning the clients, the map and the log
   map_layout.dart      the playground's reading of the map document
   debug/               kDebugMode-only: offline demo, seeding, forced closes
-  screens/             login, lobby, dungeon, key-value store
+  screens/             login, lobby, dungeon, key-value store, asset bundle
   widgets/             zone map painter, chat, party panel, banners, log panel
 test/                  widget tests against the fake gateway
 ```

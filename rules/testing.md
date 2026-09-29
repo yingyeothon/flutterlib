@@ -38,8 +38,12 @@
 - Crypto: the service's `docs/asset-encryption-vectors.json` is `asset_client`'s
   conformance test, run through the public client in both request modes (whole, and
   by every range across a segment boundary; every negative case `asset_corrupt`).
-  The test encryptor in `test/support/encrypt.dart` shares nothing with the library
-  above the AES block cipher (HMAC and HKDF from `package:crypto`, CTR from
+  The test encryptor, `encryptAsset` from
+  `package:yingyeothon_fake_gateway/asset_encryption.dart` (re-exported by
+  `test/support/encrypt.dart`; that library stays free of `dart:io` because
+  `flutter.md`'s Chrome run of `asset_client_test.dart` imports it, and the gate
+  never runs that suite), shares nothing with the library above the AES block
+  cipher (HMAC and HKDF from `package:crypto`, CTR from
   pointycastle's `SICStreamCipher`, where the library runs its own CTR over
   `AESEngine` and pointycastle's `HMac`), so the two can disagree. When the service
   regenerates the vectors, copy the file again, name the service commit in

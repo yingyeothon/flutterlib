@@ -10,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   url_launcher: ^6.3.0
+  yingyeothon_asset_client:
+    path: ../../packages/yingyeothon_asset_client
   yingyeothon_auth_client:
     path: ../../packages/yingyeothon_auth_client
   yingyeothon_codec:

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 
+import 'fake_assets.dart';
 import 'fake_kv.dart';
 
 /// A `q` connection as the game-side hook sees it.
@@ -47,6 +48,7 @@ final class FakeGatewayOptions {
     this.onGameFrame,
     this.maxPeers = 64,
     this.kvCollections = const <FakeKvCollection>[],
+    this.assetBundles = const <FakeAssetBundle>[],
     this.channels,
     this.games,
     this.clock,
@@ -79,6 +81,9 @@ final class FakeGatewayOptions {
 
   /// The collections `/kv/*` serves; empty means every kv route is a `404`.
   final List<FakeKvCollection> kvCollections;
+
+  /// The bundles `/assets/{id}/…` serves; any other path there is a `403`.
+  final List<FakeAssetBundle> assetBundles;
 
   /// Channel ids the handshake knows; any other answers `404`. `null`
   /// accepts every channel.
@@ -119,6 +124,10 @@ abstract interface class FakeGateway {
 
   /// The in-memory store behind `/kv/*`, to read what a client wrote.
   FakeKvStore get kv;
+
+  /// `http://127.0.0.1:port/assets/`; a bundle's base URL for
+  /// `AssetBundleClientOptions.baseUrl` is this plus its id and a `/`.
+  Uri get assetsUrl;
 
   /// The bound port.
   int get port;
@@ -276,7 +285,8 @@ final class _FakeGateway implements FakeGateway {
         _options.kvCollections,
         userIdOf: _userIdOf,
         acceptedTokens: _options.acceptedTokens,
-      ) {
+      ),
+      _assets = FakeAssetStore(_options.assetBundles) {
     _flush = Timer.periodic(
       Duration(milliseconds: _options.tick),
       (_) => _flushPositions(),
@@ -294,6 +304,7 @@ final class _FakeGateway implements FakeGateway {
   final FakeGatewayOptions _options;
   @override
   final FakeKvStore kv;
+  final FakeAssetStore _assets;
   late final Timer _flush;
   final Map<String, _LobbyConnection> _lobby = <String, _LobbyConnection>{};
   final Map<String, _Peer> _peers = <String, _Peer>{};
@@ -317,6 +328,8 @@ final class _FakeGateway implements FakeGateway {
   Uri get mapUrl => Uri.parse('http://127.0.0.1:$port/map.json');
   @override
   Uri get kvUrl => Uri.parse('http://127.0.0.1:$port');
+  @override
+  Uri get assetsUrl => Uri.parse('http://127.0.0.1:$port/assets/');
   @override
   Set<String> get lobbyUsers => _lobby.keys.toSet();
   @override
@@ -415,6 +428,10 @@ final class _FakeGateway implements FakeGateway {
       }
       if (FakeKvStore.handles(request.uri.path)) {
         await kv.handle(request);
+        return;
+      }
+      if (FakeAssetStore.handles(request.uri.path)) {
+        await _assets.handle(request);
         return;
       }
       if (!WebSocketTransformer.isUpgradeRequest(request)) {

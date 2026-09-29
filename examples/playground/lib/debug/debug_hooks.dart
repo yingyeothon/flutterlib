@@ -30,8 +30,8 @@ bool get offlineAutostartKv =>
 /// The close codes the debug drawer offers.
 const List<int> forcedCloseCodes = <int>[4000, 4002, 4004, 4005, 1001];
 
-/// Starts the fake gateway, points the session (gateway and key-value store)
-/// at it and signs in as `you` (the fake takes the token text as the user
+/// Starts the fake gateway, points the session (gateway, key-value store and
+/// asset bundle) at it and signs in as `you` (the fake takes the token text as the user
 /// id).
 Future<void> startOfflineDemo(Session session) async {
   if (!offlineDemoAvailable) return;
@@ -42,6 +42,8 @@ Future<void> startOfflineDemo(Session session) async {
       gatewayUrl: demo.gatewayUrl,
       channelId: 'lobby_demo',
       kvBaseUrl: demo.kvUrl,
+      assetBaseUrl: demo.assetUrl,
+      assetKey: demo.assetKey,
     ),
   );
   session.signIn(

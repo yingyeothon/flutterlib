@@ -68,3 +68,9 @@ The libraries are engine-free; this file is about the app around them.
 - Configuration is `--dart-define=YYT_*` first, then the login screen (memory only,
   never persisted). Nothing in the example stores a token.
 - Numbers on the wire are `double`; pass `x.toDouble()` from an `int` slider.
+- **A screen's `dispose` does not notify the session.** The tree is locked during
+  `dispose`, and the screen below it still listens to `Session`, so a
+  `notifyListeners()` there is "setState() or markNeedsBuild() called when widget
+  tree was locked" on every Back — the key-value screen shipped with it and no test
+  popped. Close with `notify: false` (`closeKv`, `closeAssets`), and give each new
+  screen a `tester.pageBack()` test that expects no exception.

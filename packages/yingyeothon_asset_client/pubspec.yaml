@@ -15,7 +15,8 @@ dependencies:
   yingyeothon_logger:
     path: ../yingyeothon_logger
 dev_dependencies:
-  # The test encryptor's HMAC and HKDF: an implementation the library does
-  # not use, so the two can disagree.
-  crypto: ^3.0.6
+  # The test encryptor (asset_encryption.dart, no dart:io): an
+  # implementation the library does not use, so the two can disagree.
+  yingyeothon_fake_gateway:
+    path: ../yingyeothon_fake_gateway
   test: ^1.31.0

@@ -10,7 +10,8 @@ right when this page disagrees.
 
 **Reference:** the [package README](../packages/yingyeothon_asset_client/README.md)
 carries the options, the request count of every call, the browser rules, the resume
-rules and every error code.
+rules and every error code. The playground's **Asset bundle** screen reads an encrypted
+bundle from its offline demo ([examples/playground](../examples/playground/README.md)).
 
 ## Bundle shapes
 

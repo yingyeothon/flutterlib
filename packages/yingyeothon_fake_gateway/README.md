@@ -8,7 +8,9 @@ chat and events by scope, parties with the gateway's `omitempty` marshalling,
 `ping`/`pong`, the documented refusal codes, and the close codes a test injects. The
 same listener serves the state stack's `/kv/*` routes over an in-memory store, and
 its `/time` clock, so `yingyeothon_kvstore_client` and the example's key-value screen
-run offline too.
+run offline too. It is also the CDN for asset bundles under `/assets/{id}/`,
+encrypted when given a key (the `yyt-enc v1` encryptor in `asset_encryption.dart`),
+for `yingyeothon_asset_client` and the example's asset screen.
 
 It also reproduces the failures a client must survive, each on request: the
 handshake statuses (`404` for a channel outside `channels`, `403` for a game or member
@@ -43,12 +45,15 @@ flowchart LR
   fake -- "GET /map.json" --> sdk
   test -- "options.kvCollections; kv.valueText()" --> fake
   kv["KvStoreClient"] <-- "/kv/{col}/… Authorization: Bearer" --> fake
+  test -- "options.assetBundles" --> fake
+  assets["AssetBundleClient"] <-- "/assets/{id}/… Range, If-Range" --> fake
 ```
 
 ## Install
 
 Only as a dev dependency inside this repository; `yingyeothon_fake_gateway` is never
-published and imports `dart:io`, so it cannot run on web.
+published and imports `dart:io`, so it cannot run on web — all but
+`asset_encryption.dart`, which a browser test may import.
 
 ```yaml
 dev_dependencies:
@@ -96,17 +101,42 @@ await kv.collection('profile').mine.put('settings', {'volume': 0.5});
 gw.kv.valueText('profile', 'settings', owner: 'alice'); // '{"volume":0.5}'
 ```
 
+An asset bundle is its files, encrypted at start when given a 32-byte key:
+
+```dart
+final key = Uint8List.fromList(List<int>.generate(32, (i) => i)); // build it, never paste one
+final gw = await FakeGateway.start(
+  options: FakeGatewayOptions(assetBundles: <FakeAssetBundle>[
+    FakeAssetBundle(id: 'ab_demo', key: key, files: {'manifest.json': utf8.encode('{"v":1}')}),
+  ]),
+);
+final assets = AssetBundleClient(AssetBundleClientOptions(
+  baseUrl: gw.assetsUrl.resolve('ab_demo/').toString(),
+  key: assetKeyText(key),
+));
+await assets.readJson('manifest.json'); // {v: 1}
+```
+
+The CDN answers `GET` and `HEAD`, one `Range`, `If-Range` against its md5 `ETag`,
+`416` past the end and `403` for anything missing; it sends no CORS headers,
+ignores `Cache-Control`, and cannot replace a file while it runs.
+
 ## Public API
 
-- `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `port`, `lobbyUsers`,
+- `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `assetsUrl`, `port`,
+  `lobbyUsers`,
   `gameMembers`, `received`, `closeUser`, `sendRaw`, `sendBinary`,
   `refuseHandshakes`, `stallGame`, `holdOutbound`, `releaseOutbound`, `shutdown`).
 - `FakeGatewayOptions` (`acceptedTokens`, `tick`, `capabilities`, `partySizeMax`,
   `defaultZone`, `mapDocument`, `onGameFrame`, `maxPeers`, `kvCollections`,
-  `channels`, `games`, `clock`, `maxMoveDelta`), `GameFrameHandler`, `GameSession`.
+  `assetBundles`, `channels`, `games`, `clock`, `maxMoveDelta`), `GameFrameHandler`,
+  `GameSession`.
 - `FakeKvCollection` (`name`, `id`, `readScope`, `writeScope`, `encrypted`,
   `maxEntries`, `maxEntriesPerOwner`, `entries`, `ownerEntries`), `FakeKvStore`
   (`valueText`, `handles`, `handle`).
+- `FakeAssetBundle` (`id`, `objects`; built from `files` and an optional `key`).
+- `encryptAsset`, `assetKeyText` — also alone in `asset_encryption.dart`, which
+  imports no `dart:io`, for a test that runs in a browser.
 
 ## Differences from the tslib gateway-contract example
 

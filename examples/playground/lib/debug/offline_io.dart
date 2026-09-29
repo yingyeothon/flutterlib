@@ -2,8 +2,10 @@
 // and drives extra raw sockets as seeded peers. Only reachable in debug
 // builds through debug_hooks.dart.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 import 'package:yingyeothon_fake_gateway/yingyeothon_fake_gateway.dart';
@@ -25,16 +27,45 @@ final Map<String, Object?> demoMapDocument = <String, Object?>{
   ],
 };
 
+/// The demo's asset bundle id, and its files: a manifest, a text file and a
+/// binary of five 64 KiB segments, so a download reports progress.
+const String demoBundleId = 'ab_demo';
+const String demoText = 'Hello from an encrypted asset bundle.';
+
+Map<String, List<int>> _demoAssetFiles() {
+  final big = Uint8List(300000);
+  for (var i = 0; i < big.length; i++) {
+    big[i] = (i * 31 + (i >> 8)) & 0xff;
+  }
+  return <String, List<int>>{
+    'manifest.json': utf8.encode(
+      Json.encode(<String, Object?>{
+        'v': 1,
+        'files': <Object?>['hello.txt', 'big.bin'],
+      }),
+    ),
+    'hello.txt': utf8.encode(demoText),
+    'big.bin': big,
+  };
+}
+
 /// A running fake gateway plus the seeded peers attached to it.
 class OfflineDemo {
-  OfflineDemo._(this.gateway);
+  OfflineDemo._(this.gateway, this.assetKey);
 
   final FakeGateway gateway;
+
+  /// A fresh key per demo, made at run time: no key text is in the tree.
+  final String assetKey;
   final List<_Seed> _seeds = <_Seed>[];
   bool _seeding = false;
   Timer? _wander;
 
   static Future<OfflineDemo> start() async {
+    final random = Random.secure();
+    final key = Uint8List.fromList(
+      List<int>.generate(32, (_) => random.nextInt(256)),
+    );
     final gateway = await FakeGateway.start(
       options: FakeGatewayOptions(
         tick: 100,
@@ -66,14 +97,21 @@ class OfflineDemo {
             writeScope: 'user',
           ),
         ],
+        assetBundles: <FakeAssetBundle>[
+          FakeAssetBundle(id: demoBundleId, key: key, files: _demoAssetFiles()),
+        ],
       ),
     );
-    return OfflineDemo._(gateway);
+    final text = assetKeyText(key);
+    key.fillRange(0, key.length, 0);
+    return OfflineDemo._(gateway, text);
   }
 
   String get gatewayUrl => gateway.wsUrl.toString();
 
   String get kvUrl => gateway.kvUrl.toString();
+
+  String get assetUrl => gateway.assetsUrl.resolve('$demoBundleId/').toString();
 
   /// Connects [count] raw sockets as `seed-1..N`, drops them into [zone] and
   /// walks each one step in a random direction every 400 ms — a step, not a

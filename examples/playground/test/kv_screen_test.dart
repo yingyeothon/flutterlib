@@ -105,6 +105,15 @@ void main() {
     expect(find.text('No settings stored yet'), findsOneWidget);
   });
 
+  testWidgets('leaving the screen closes the client cleanly', (tester) async {
+    await open(tester);
+    expect(session.kv, isNotNull);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(session.kv, isNull);
+  });
+
   testWidgets('saves and reloads my settings through /u/me', (tester) async {
     await open(tester);
     await tester.enterText(find.byKey(const Key('settings-volume')), '0.25');

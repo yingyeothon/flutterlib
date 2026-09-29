@@ -10,6 +10,10 @@ class OfflineDemo {
 
   String get kvUrl => '';
 
+  String get assetUrl => '';
+
+  String get assetKey => '';
+
   Future<bool> seedPeers(String zone, {int count = 3}) async => false;
 
   Future<void> closeUser(String userId, int code) async {}

@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:yingyeothon_asset_client/yingyeothon_asset_client.dart';
 import 'package:yingyeothon_auth_client/yingyeothon_auth_client.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 import 'package:yingyeothon_kvstore_client/yingyeothon_kvstore_client.dart';
@@ -544,13 +546,109 @@ class Session extends ChangeNotifier {
     await loadSettings();
   }
 
-  void closeKv() {
+  /// [notify] `false` from a screen's `dispose`: the tree is locked then,
+  /// and a screen below that listens to the session would rebuild into it.
+  void closeKv({bool notify = true}) {
     kv?.close();
     kv = null;
     announcements = const <KvListEntry>[];
     settings = null;
     settingsAbsent = false;
+    if (notify) notifyListeners();
+  }
+
+  // ---- assets --------------------------------------------------------------
+
+  /// The reader for the configured bundle; the CDN needs no token.
+  AssetBundleClient? assets;
+
+  /// `manifest.json`, decoded; `null` until read.
+  Object? manifest;
+
+  /// `hello.txt`, decoded as UTF-8; `null` until read.
+  String? assetText;
+
+  /// The last progress report of the `big.bin` download.
+  AssetDownloadProgress? downloadProgress;
+
+  /// What the last finished download wrote.
+  AssetDownloadResult? downloaded;
+
+  /// The files the demo bundle holds. A real bundle is synced with `yyt asset
+  /// sync`, and a game reads the paths it needs out of its manifest.
+  static const String manifestPath = 'manifest.json';
+
+  /// See [manifestPath].
+  static const String textPath = 'hello.txt';
+
+  /// See [manifestPath].
+  static const String binaryPath = 'big.bin';
+
+  /// Creates (or recreates) the reader from the config.
+  AssetBundleClient openAssets() {
+    if (!config.canUseAssets) throw StateError('asset base URL is required');
+    closeAssets();
+    final client = AssetBundleClient(
+      AssetBundleClientOptions(
+        baseUrl: config.assetBaseUrl,
+        key: config.assetKey.isEmpty ? null : config.assetKey,
+        logger: logger,
+      ),
+    );
+    assets = client;
     notifyListeners();
+    return client;
+  }
+
+  /// Reads the manifest, the one file a live bundle replaces in place; the
+  /// CDN serves it revalidated, so no cache flag is needed (docs/assets.md).
+  Future<void> loadManifest() async {
+    final client = assets ?? openAssets();
+    manifest = await client.readJson(manifestPath);
+    note('asset manifest: read');
+    notifyListeners();
+  }
+
+  Future<void> readAssetText() async {
+    final client = assets ?? openAssets();
+    final bytes = await client.read(textPath);
+    assetText = utf8.decode(bytes, allowMalformed: true);
+    note('asset text: ${bytes.length} bytes');
+    notifyListeners();
+  }
+
+  /// Streams `big.bin` through a sink that only counts, reporting after every
+  /// verified piece. A real app writes to disk with `downloadToFile`
+  /// (`yingyeothon_asset_client_io.dart`), which resumes from an
+  /// `AssetResume`.
+  Future<void> downloadBinary() async {
+    final client = assets ?? openAssets();
+    final sink = _CountingSink();
+    downloaded = null;
+    downloadProgress = null;
+    notifyListeners();
+    final result = await client.download(
+      binaryPath,
+      sink: sink,
+      onProgress: (p) {
+        downloadProgress = p;
+        notifyListeners();
+      },
+    );
+    downloaded = result;
+    note('asset download: ${result.bytes} bytes, ${sink.pieces} pieces');
+    notifyListeners();
+  }
+
+  /// [notify] as in [closeKv].
+  void closeAssets({bool notify = true}) {
+    assets?.close();
+    assets = null;
+    manifest = null;
+    assetText = null;
+    downloadProgress = null;
+    downloaded = null;
+    if (notify) notifyListeners();
   }
 
   @override
@@ -560,7 +658,27 @@ class Session extends ChangeNotifier {
     unawaited(closeGame());
     kv?.close();
     kv = null;
+    assets?.close();
+    assets = null;
     super.dispose();
+  }
+}
+
+/// Counts what a download wrote; the demo keeps no bytes.
+class _CountingSink implements AssetSink {
+  int bytes = 0;
+  int pieces = 0;
+
+  @override
+  void write(Uint8List chunk) {
+    bytes += chunk.length;
+    pieces++;
+  }
+
+  @override
+  void reset() {
+    bytes = 0;
+    pieces = 0;
   }
 }
 

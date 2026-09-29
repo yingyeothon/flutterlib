@@ -6,6 +6,7 @@ import '../config.dart';
 import '../debug/debug_hooks.dart';
 import '../session.dart';
 import '../widgets/log_panel.dart';
+import 'asset_screen.dart';
 import 'kv_screen.dart';
 import 'lobby_screen.dart';
 
@@ -25,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _authBase;
   late final TextEditingController _authChannel;
   late final TextEditingController _kvBase;
+  late final TextEditingController _assetBase;
   final TextEditingController _jwt = TextEditingController();
   final TextEditingController _returned = TextEditingController();
   final TextEditingController _redirect = TextEditingController(
@@ -45,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _authBase = TextEditingController(text: c.authBaseUrl);
     _authChannel = TextEditingController(text: c.authChannelId);
     _kvBase = TextEditingController(text: c.kvBaseUrl);
+    _assetBase = TextEditingController(text: c.assetBaseUrl);
     if (offlineAutostart || offlineAutostartKv) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _offline();
@@ -62,6 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _authBase,
       _authChannel,
       _kvBase,
+      _assetBase,
       _jwt,
       _returned,
       _redirect,
@@ -71,12 +75,14 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  PlaygroundConfig _readConfig() => PlaygroundConfig(
+  // copyWith: the asset key has no field and must survive an edit.
+  PlaygroundConfig _readConfig() => session.config.copyWith(
     gatewayUrl: _gateway.text.trim(),
     channelId: _channel.text.trim(),
     authBaseUrl: _authBase.text.trim(),
     authChannelId: _authChannel.text.trim(),
     kvBaseUrl: _kvBase.text.trim(),
+    assetBaseUrl: _assetBase.text.trim(),
   );
 
   Future<void> _run(Future<void> Function() action) async {
@@ -90,6 +96,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _error = 'sign-in failed: $e');
     } on Exception catch (e) {
       // Never the token: these are SDK-authored messages.
+      if (mounted) setState(() => _error = e.toString());
+    } on StateError catch (e) {
+      // An Error, not an Exception: this screen's own "fill this in" checks.
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -145,6 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _gateway.text = session.config.gatewayUrl;
     _channel.text = session.config.channelId;
     _kvBase.text = session.config.kvBaseUrl;
+    _assetBase.text = session.config.assetBaseUrl;
   });
 
   Future<void> _enterLobby() async {
@@ -168,6 +178,17 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     if (_error != null || !mounted) return;
     await Navigator.of(context).pushNamed(KvScreen.route);
+  }
+
+  Future<void> _openAssets() async {
+    await _run(() async {
+      session.updateConfig(_readConfig());
+      if (!session.config.canUseAssets) {
+        throw StateError('asset base URL is required');
+      }
+    });
+    if (_error != null || !mounted) return;
+    await Navigator.of(context).pushNamed(AssetScreen.route);
   }
 
   @override
@@ -204,6 +225,17 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: _kvBase,
             decoration: const InputDecoration(
               labelText: 'Key-value store base URL (https://doc…)',
+            ),
+          ),
+          TextField(
+            key: const Key('asset-base'),
+            controller: _assetBase,
+            decoration: InputDecoration(
+              labelText: 'Asset bundle base URL (https://d…/assets/ab_…/)',
+              // The key comes from --dart-define=YYT_ASSET_KEY only.
+              helperText: session.config.assetKey.isEmpty
+                  ? 'no YYT_ASSET_KEY: read as plain'
+                  : 'key from YYT_ASSET_KEY: read as encrypted',
             ),
           ),
           const SizedBox(height: 16),
@@ -273,6 +305,11 @@ class _LoginScreenState extends State<LoginScreen> {
             key: const Key('open-kv'),
             onPressed: _busy || !session.signedIn ? null : _openKv,
             child: const Text('Key-value store'),
+          ),
+          FilledButton.tonal(
+            key: const Key('open-assets'),
+            onPressed: _busy ? null : _openAssets,
+            child: const Text('Asset bundle'),
           ),
           if (_error != null)
             Padding(

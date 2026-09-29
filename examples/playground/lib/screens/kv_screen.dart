@@ -46,7 +46,7 @@ class _KvScreenState extends State<KvScreen> {
   @override
   void dispose() {
     _volume.dispose();
-    session.closeKv();
+    session.closeKv(notify: false);
     super.dispose();
   }
 
