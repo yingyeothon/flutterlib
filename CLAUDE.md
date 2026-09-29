@@ -7,10 +7,11 @@
   [csharplib](https://github.com/yingyeothon/csharplib): `packages/yingyeothon_*` are
   pure Dart (no Flutter import) so `dart test` covers them, and `examples/playground`
   is the Flutter app that shows them wired together.
-- Seven packages in one pub workspace: `codec`, `logger`, `event_broker`,
+- Eight packages in one pub workspace: `codec`, `logger`, `event_broker`,
   `gamebase_client` (the gateway SDK), `auth_client`, `kvstore_client` (the key-value
-  store client), and `fake_gateway` (an in-process gateway and `/kv/*` store for tests
-  and the offline demo; never published).
+  store client), `asset_client` (the CDN asset-bundle reader), and `fake_gateway` (an
+  in-process gateway and `/kv/*` store for tests and the offline demo; never
+  published).
 - Source of truth documents:
   - `CONVENTIONS.md` — Dart API design rules. Canonical; do not restate or contradict.
   - `README.md` — what the library is for, the package list and the dependency graph.
@@ -21,7 +22,9 @@
 - The normative wire spec for `gamebase_client` is the gateway's own README and
   `gateway/internal/lobby/protocol.go` in the `service` repository, not tslib. For
   `kvstore_client` it is `services/state/README.md` (_KV routes_) and
-  `packages/console-db/src/kvstore.ts` there; `KvRules` copies its constants.
+  `packages/console-db/src/kvstore.ts` there; `KvRules` copies its constants. For
+  `asset_client` it is `docs/asset-encryption.md` there, with its vectors, and the
+  browser rules in its `rules/deployment.md`.
 
 ## Required Rule Lookup
 

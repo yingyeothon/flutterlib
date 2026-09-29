@@ -38,6 +38,7 @@ handle it.
 | [Authentication](docs/authentication.md) | how a client gets its channel JWT |
 | [Lobby](docs/lobby.md) / [Dungeon](docs/dungeon.md) | the two channel kinds, feature by feature |
 | [Key-value store](docs/kvstore.md) | announcements and a player's own record, with the same token |
+| [Asset bundles](docs/assets.md) | game files from the CDN, encrypted or not: a manifest, a range, a resumable download |
 | [Connection lifecycle](docs/connection-lifecycle.md) | states, events, reconnect, backoff |
 | [Errors](docs/errors.md) / [Troubleshooting](docs/troubleshooting.md) | every refusal, close code and symptom |
 | [Flutter](docs/flutter.md) | platforms, background, debug hooks, desktop verification |
@@ -53,6 +54,7 @@ handle it.
 | [yingyeothon_gamebase_client](packages/yingyeothon_gamebase_client) | Client SDK for the yyt realtime gateway (lobby + dungeon `q`) |
 | [yingyeothon_auth_client](packages/yingyeothon_auth_client) | The client half of the auth channel: config, sign-in URL, redirect, exchange, verify |
 | [yingyeothon_kvstore_client](packages/yingyeothon_kvstore_client) | Client for the yyt key-value store: collections by name, `me` namespace, versions, TTL, `incr` |
+| [yingyeothon_asset_client](packages/yingyeothon_asset_client) | Reader for asset bundles on the CDN: whole files, JSON, ranges, resumable downloads; decrypts and verifies `yyt-enc v1` |
 | [yingyeothon_fake_gateway](packages/yingyeothon_fake_gateway) | In-process gateway for tests and the offline demo; never published |
 
 The arrows are the `dependencies:` each pubspec declares; `event_broker` stands alone.
@@ -65,6 +67,8 @@ graph LR
   yingyeothon_auth_client --> yingyeothon_codec
   yingyeothon_kvstore_client --> yingyeothon_codec
   yingyeothon_kvstore_client --> yingyeothon_logger
+  yingyeothon_asset_client --> yingyeothon_codec
+  yingyeothon_asset_client --> yingyeothon_logger
   yingyeothon_fake_gateway --> yingyeothon_codec
 ```
 
@@ -80,8 +84,9 @@ has twenty packages; the rest are AWS Lambda, Redis or Node-socket server code t
 cannot run on a phone. Two things are new here: `yingyeothon_auth_client`, because a
 Flutter app signs in through a browser redirect and the parsing is easy to get
 wrong, and `yingyeothon_fake_gateway`, so the SDK is tested end to end and the example
-runs with no credential. `yingyeothon_kvstore_client` is the Dart port of tslib's
-`kvstore-client`, with the same shape in all three languages.
+runs with no credential. `yingyeothon_kvstore_client` and `yingyeothon_asset_client`
+are the Dart ports of tslib's `kvstore-client` and `asset-client`, with the same shape
+and vocabulary in every language that has them.
 
 ## Install
 
@@ -103,6 +108,10 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_kvstore_client
+  yingyeothon_asset_client:
+    git:
+      url: https://github.com/yingyeothon/flutterlib.git
+      path: packages/yingyeothon_asset_client
 ```
 
 **No release has been tagged yet**, so these track `main`. Nothing is on pub.dev.

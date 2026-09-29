@@ -1,0 +1,3 @@
+# The service repository's conformance vectors: folded on GitHub as generated, but
+# never -diff, which would hide them from the hooks' and gitleaks' diff-based scans.
+packages/yingyeothon_asset_client/test/fixtures/*.json linguist-generated=true

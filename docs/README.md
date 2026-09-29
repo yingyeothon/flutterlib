@@ -19,6 +19,7 @@ packages. Each page is one task; read the first three in order, then jump.
 | show players moving around a shared zone, chat, parties | [Lobby](lobby.md) |
 | run a dungeon against your own game actor | [Dungeon](dungeon.md) |
 | read announcements, save a player's own record | [Key-value store](kvstore.md) |
+| load game files from the CDN — a manifest, a database, music — encrypted or not | [Asset bundles](assets.md) |
 | know what happens on a bad network, a gateway restart, a dead token | [Connection lifecycle](connection-lifecycle.md) |
 | handle every refusal, close code and exception | [Errors](errors.md) |
 | ship on web, keep the socket alive across background, verify on desktop | [Flutter](flutter.md) |
@@ -36,12 +37,15 @@ flowchart LR
   lobby["Lobby"] --> gc
   dungeon["Dungeon"] --> gc
   kv["Key-value store"] --> kc["kvstore_client"]
+  assets["Asset bundles"] --> asc["asset_client"]
   life["Connection lifecycle"] --> gc
   flutter["Flutter"] --> fg["fake_gateway"]
   gc --> codec["codec"]
   gc --> logger["logger"]
   kc --> codec
   kc --> logger
+  asc --> codec
+  asc --> logger
 ```
 
 ## Reference
@@ -50,6 +54,7 @@ flowchart LR
   [gamebase_client](../packages/yingyeothon_gamebase_client/README.md),
   [auth_client](../packages/yingyeothon_auth_client/README.md),
   [kvstore_client](../packages/yingyeothon_kvstore_client/README.md),
+  [asset_client](../packages/yingyeothon_asset_client/README.md),
   [codec](../packages/yingyeothon_codec/README.md),
   [logger](../packages/yingyeothon_logger/README.md),
   [event_broker](../packages/yingyeothon_event_broker/README.md),
@@ -58,7 +63,7 @@ flowchart LR
 
 ## What lives in the `service` repository
 
-The gateway's wire protocol, the auth service's endpoints, the key-value store and the
-console are owned by
+The gateway's wire protocol, the auth service's endpoints, the key-value store, the
+asset CDN with its encryption format, and the console are owned by
 [yingyeothon/service](https://github.com/yingyeothon/service). This guide cites them;
 when the two disagree, `service` is right and this SDK follows.

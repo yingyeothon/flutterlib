@@ -1,0 +1,21 @@
+name: yingyeothon_asset_client
+description: Reader for yyt asset bundles on the CDN - a whole file, a JSON manifest, a byte range or a resumable download, decrypting and verifying yyt-enc v1 bundles.
+version: 0.1.0
+# Installed by git dependency; nothing is on pub.dev (rules/release.md).
+publish_to: none
+repository: https://github.com/yingyeothon/flutterlib
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dependencies:
+  http: ^1.6.0
+  pointycastle: ^3.9.1
+  yingyeothon_codec:
+    path: ../yingyeothon_codec
+  yingyeothon_logger:
+    path: ../yingyeothon_logger
+dev_dependencies:
+  # The test encryptor's HMAC and HKDF: an implementation the library does
+  # not use, so the two can disagree.
+  crypto: ^3.0.6
+  test: ^1.31.0

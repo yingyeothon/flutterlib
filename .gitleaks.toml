@@ -2,7 +2,7 @@
 # sibling `service` and `csharplib` repos use, so a leak is caught the same way in
 # every yyt repository.
 #
-# This repository has no infrastructure and needs no credentials: it is six Dart
+# This repository has no infrastructure and needs no credentials: it is Dart
 # packages, their tests and a Flutter example. So the rule here is not "redact the
 # secrets we keep" — it is "nothing of that shape should ever exist", and every
 # allowlist entry below is a test fixture that is obviously not a credential.
@@ -30,6 +30,18 @@ regexes = [
   '''[=:][ \t]*[A-Za-z_][A-Za-z0-9_]{0,40}(\.[A-Za-z_][A-Za-z0-9_]{0,40})?[ \t]*[;,)]''',
 ]
 
+# An encrypted asset bundle's key in its text form (the service repository's
+# docs/asset-encryption.md): `yak1.` + 43 base64url characters. Readable by the
+# bundle's team and meant to ship inside an app, never inside this repository.
+# The one allowed value is the service's test-vector key (bytes
+# 0123456789abcdef x4) in that form, which the conformance fixture carries.
+[[rules]]
+id = "yyt-asset-bundle-key"
+description = "Encrypted asset bundle key (yak1.<43 base64url>)"
+regex = '''yak1\.[A-Za-z0-9_-]{43}'''
+[rules.allowlist]
+regexes = ['''yak1\.ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8''']
+
 [allowlist]
 description = "Config itself and the deliberately fake fixtures"
 paths = ['''\.gitleaks\.toml$''']
@@ -37,4 +49,11 @@ paths = ['''\.gitleaks\.toml$''']
 # like a JWT to a human and are not one. The tests that assert the token never
 # reaches a log line need a literal to search for, so it has to be in the source.
 # "0123456789abcdef" is the shared non-secret channel-id fixture of every yyt repo.
-regexes = ['''eyJ\.secret-token\.sig''', '''(0123456789abcdef){1,4}''']
+# "yak1.ASNF…" is the same bytes in the asset-key text form (the service's test
+# vectors); the default generic-api-key rule matches it too, so it is allowed here
+# by exact value as well as in the yak1 rule above.
+regexes = [
+  '''eyJ\.secret-token\.sig''',
+  '''(0123456789abcdef){1,4}''',
+  '''yak1\.ASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8''',
+]
