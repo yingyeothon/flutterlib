@@ -30,6 +30,20 @@
 - HTTP: a scripted `MapHttpFetcher` or an `http.BaseClient` subclass with an answer
   queue (`auth_client/test/`, `kvstore_client/test/fake_http_client.dart`, which
   also stalls headers or a body to drive the timeout). Never a real host.
+  `asset_client/test/support/fake_cdn.dart` is a CDN: objects by URL, `Range`,
+  `If-Range` and `HEAD` answered as CloudFront does, a `crossOrigin` mode that hides
+  every header a browser cannot read, and `openBodies`, which a test that reads or
+  abandons a body asserts is 0 at its end — a body the client neither read to the
+  end nor cancelled holds a connection.
+- Crypto: the service's `docs/asset-encryption-vectors.json` is `asset_client`'s
+  conformance test, run through the public client in both request modes (whole, and
+  by every range across a segment boundary; every negative case `asset_corrupt`).
+  The test encryptor in `test/support/encrypt.dart` shares nothing with the library
+  above the AES block cipher (HMAC and HKDF from `package:crypto`, CTR from
+  pointycastle's `SICStreamCipher`, where the library runs its own CTR over
+  `AESEngine` and pointycastle's `HMac`), so the two can disagree. When the service
+  regenerates the vectors, copy the file again, name the service commit in
+  `vectors_test.dart`, and update the case counts in its first test.
 - `flutter_test` replaces every `HttpClient` with one that answers an empty `400`;
   a widget test that talks HTTP to the fake gateway sets `HttpOverrides.global =
   null` (each test file is its own isolate). In a file whose other tests rely on

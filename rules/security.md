@@ -9,7 +9,7 @@
   keystore, no provisioning profile, no `google-services.json` — a file of that shape
   is a mistake, not configuration.
 - Hostnames are allowed only where the sibling **public** `service` repo already
-  publishes them (`gw`, `auth`, `console`, `d`, `doc` and their `-dev` twins under
+  publishes them (`gw`, `auth`, `console`, `d`, `doc` and their dev twins — `gw-dev`, …, and `dev-d` for the CDN — under
   `yyt.life`). Repeating what is already public is not a disclosure; being the first to
   publish something is. Check `git grep` in `service` before adding a new one, and
   never add a stateful host, database or account name — those live in the private ops
@@ -112,6 +112,13 @@
   answer arrived, a status and a byte count. A key and a value are peer-chosen by
   the time they reach a message, so a local refusal names the grammar, never the
   input.
+- `asset_client` holds an asset bundle key (`yak1.` + 43 base64url characters, or 32
+  bytes). It is meant to ship inside an app, never inside this repository:
+  `.gitleaks.toml` refuses the shape and allowlists the service's test-vector key by
+  value, the one key text the tree may hold (in the conformance fixture). An
+  `AssetClientException` is a code, a status and a fixed phrase; a log line is a
+  request kind, the path, the status and the range — never the key, a URL, a body
+  byte or a transport error's text. The tests build every other key at run time.
 
 ## Building what goes out
 

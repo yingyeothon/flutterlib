@@ -122,11 +122,14 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
 
 ## Scope decisions already made
 
-- Seven packages (`kvstore_client` was added as the seventh by owner decision), no
-  more without a reason that survives "can this run on a phone?".
+- Eight packages (`kvstore_client` was added as the seventh and `asset_client` as the
+  eighth by owner decision: the service's `docs/asset-encryption.md` specifies an
+  `asset-client` for tslib, csharplib and flutterlib), no more without a reason that survives "can this run on a phone?".
 - The gateway wire protocol is owned by the `service` repository. When it changes,
   this SDK follows it — never the other way round.
-- The example is one app (`playground`) that exercises every package; a second
+- The example is one app (`playground`) that exercises every package but
+  `asset_client`, which has no screen yet (its offline demo would need the fake
+  gateway to serve a bundle — a follow-up); a second
   example needs a purpose the first cannot carry.
 - No package receives the auth redirect (owner decision, 2026-09-29): it is platform
   glue, `docs/authentication.md` says how per platform, and on Linux and Windows

@@ -145,6 +145,39 @@ deleted channel parks its name for those 30 days, and try the two deletes then. 
 in `<scratch>/jwt.txt` for the run and nowhere else: never under the tree, never
 `echo`ed, never in a commit message.
 
+## Asset bundles against dev
+
+`yyt asset create --encrypted` and `yyt asset key show` need CLI v0.12.0 or later
+(`yyt --version`; 0.15.0 was installed on 2026-09-29). If yours is older, update it;
+building from the `service` repository's `cli/` with `go build -o <scratch>/yyt
+./cmd/yyt` is the fallback and writes nothing into that repository. With
+`YYT_PROFILE=dev`, `YYT_TEAM=<throwaway>` and `YYT_PROJECT=game` exported as in the
+key-value section (reuse them; a bundle that already exists is reused too):
+
+```bash
+yyt asset create <throwaway>-assets --mode live --encrypted
+yyt asset key show <throwaway>-assets > <scratch>/key.txt   # stdout only; never echo it
+mkdir -p <scratch>/bundle && printf '{"v":1}' > <scratch>/bundle/manifest.json \
+  && head -c 200000 /dev/urandom > <scratch>/bundle/big.bin
+yyt asset sync <throwaway>-assets <scratch>/bundle --mutable manifest.json
+yyt asset files <throwaway>-assets   # the URL column; <bundleId> follows /assets/
+(cd packages/yingyeothon_asset_client && \
+  YYT_ASSET_BASE_URL=https://dev-d.yyt.life/assets/<bundleId>/ \
+  YYT_ASSET_KEY="$(cat <scratch>/key.txt)" YYT_ASSET_FILE=big.bin \
+  YYT_ASSET_MANIFEST_V=1 dart test test/integration/dev_test.dart)
+```
+
+Then write `{"v":2}` into `manifest.json`, sync again, and rerun with
+`YYT_ASSET_MANIFEST_V=2`: the new content, no invalidation. Afterwards `yyt asset
+delete <throwaway>-assets` and `rm <scratch>/key.txt`; record `Verified: dev assets,
+dev_test (v1, then v2)`.
+
+Two checks stay with the owner until the playground reads a bundle: the same reads
+in a browser (`corsSafe` against the real CDN's CORS rules; `dev_test.dart` reads
+the environment through `dart:io` and cannot run there), and a resumed download of a
+file over the 2 MiB default `asset.fileBytes`, which needs a platform admin to raise
+the limit and a phone to kill mid-download.
+
 ## Method
 
 - Vary one thing at a time. A claim that a change restored a behaviour needs a

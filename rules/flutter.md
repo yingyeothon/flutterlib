@@ -17,7 +17,15 @@ The libraries are engine-free; this file is about the app around them.
 - Web has no `dart:io` and no custom headers on a browser WebSocket. The token rides
   the subprotocol list on every platform for that reason; `package:web_socket_channel`
   is the one transport, and the code has no `dart:io` import under `lib/` except in
-  `fake_gateway`, which is never shipped.
+  `fake_gateway`, which is never shipped, and in
+  `asset_client/lib/yingyeothon_asset_client_io.dart` (`downloadToFile`).
+- A `dart:io` convenience goes in a library of its own that the core barrel never
+  imports, as `yingyeothon_asset_client_io.dart` does — never in a `part` of the core
+  or a file the core imports: a part shares its library's imports, and the core would
+  stop compiling for web. Prove the split with `(cd packages/yingyeothon_asset_client
+  && dart test -p chrome test/asset_client_test.dart)`, the one suite there that
+  imports only the core barrel; the gate does not run it, and without Chrome say so
+  in the commit's `Verified:` line.
 - On web a browser reports every failed handshake as close `1006`. The policy is
   written for that: `maxHandshakeFailures` is what ends a dead token, not a status
   code.
