@@ -75,6 +75,17 @@ class _LobbyScreenState extends State<LobbyScreen> {
             onPressed: () =>
                 Navigator.of(context).pushNamed(DungeonScreen.route),
           ),
+          // Without this the drawer is unreachable on desktop (rules/flutter.md,
+          // "Example mechanics"); the automatic button needs empty `actions`.
+          if (debugHooksAvailable && session.offlineHandle != null)
+            Builder(
+              builder: (context) => IconButton(
+                key: const Key('open-debug-drawer'),
+                tooltip: 'Debug drawer',
+                icon: const Icon(Icons.bug_report),
+                onPressed: Scaffold.of(context).openEndDrawer,
+              ),
+            ),
         ],
         bottom: const TabBar(
           tabs: <Widget>[

@@ -65,6 +65,12 @@ The libraries are engine-free; this file is about the app around them.
   Flutter 3.47), so that line is committed — without it CI's clean-tree check after
   the web `create` fails. A new platform gets the same check: run its `create`,
   then `git status --porcelain .`.
+- Desktop input facts (checked 2026-10-01, Flutter 3.47.5, against the SDK's
+  `material/drawer.dart` and `material/app_bar.dart`): a drawer never opens from an
+  edge drag on linux, macOS or windows, and an `AppBar` adds its automatic drawer
+  button only when `actions` is empty, so a drawer behind an app bar with actions
+  needs its own button (the lobby's debug drawer has one). A `TabBarView` does not
+  swipe with a mouse; click the tab.
 - Configuration is `--dart-define=YYT_*` first, then the login screen (memory only,
   never persisted). Nothing in the example stores a token.
 - Numbers on the wire are `double`; pass `x.toDouble()` from an `int` slider.

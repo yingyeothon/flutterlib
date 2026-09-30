@@ -91,6 +91,8 @@ void main() {
     await openLobby(tester);
     expect(find.textContaining('Lobby · connected'), findsOneWidget);
     expect(find.text('0 peer(s) in view'), findsOneWidget);
+    // Without the offline demo there is no debug drawer and no button for it.
+    expect(find.byKey(const Key('open-debug-drawer')), findsNothing);
 
     late WebSocket other;
     await tester.runAsync(() async {
@@ -291,6 +293,17 @@ void main() {
     await pumpUntil(tester, () => session.lobby!.partyId != null);
     expect(find.textContaining('Party pty_'), findsOneWidget);
     expect(find.text('• you'), findsOneWidget);
+  });
+
+  testWidgets('the debug drawer opens from its app bar button', (tester) async {
+    // The button and the drawer share the offline-demo gate; nothing in the
+    // drawer is tapped, so a plain object stands in for the demo handle.
+    session.offlineHandle = Object();
+    await openLobby(tester);
+    await tester.tap(find.byKey(const Key('open-debug-drawer')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('seed-peers')), findsOneWidget);
+    expect(find.byKey(const Key('force-close-4002')), findsOneWidget);
   });
 
   testWidgets('a forced 4002 shows the reconnect banner, then clears', (

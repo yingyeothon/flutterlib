@@ -107,7 +107,7 @@ a time for the same reason, and *Seed peers* seeds them once per demo.
 | Where | Hook | Effect |
 | --- | --- | --- |
 | Login | Offline demo | starts the fake gateway (lobby, `q`, `/kv/*` and an encrypted bundle under `/assets/*`), fills the config, signs you in as `you` |
-| Lobby → debug drawer | Seed peers | three extra identities join your zone and wander |
+| Lobby → debug drawer (the bug icon at the end of the app bar) | Seed peers | three extra identities join your zone and wander |
 | Lobby → debug drawer | Force close 4000 / 4002 / 4004 / 4005 / 1001 | the fake closes your socket with that code |
 | Dungeon | Abort (4001) / Finish (1000) | the fake closes your `q` socket |
 | Everywhere | Log panel | the SDK's logger at `debug` |

@@ -21,8 +21,8 @@ process and connects the SDK to it over the real transport. Walk the change:
   12 and chips `Zone001`–`Zone003` (the log panel says `map loaded: 24x16, 3
   zone(s), 11 blocked`); from the spawn (5, 5), seven moves right — the seventh,
   into column 12, is ignored; a second identity
-  (Debug drawer → *Seed peers*) appears and moves; a zone chip empties and refills
-  the map.
+  (Debug drawer → *Seed peers*; the drawer opens from the bug icon at the end of
+  the app bar) appears and moves; a zone chip empties and refills the map.
 - Chat tab: a zone message echoes back with your id; a whisper to `seed-1` echoes
   back too (seeds are real sockets on the fake); a whisper to `nobody` is refused
   with `unknown_user` in the log panel.
@@ -75,33 +75,95 @@ build/linux/x64/debug/bundle/yyt_playground
 Add a hook when a verification needs a state that is slow to reach by hand; keep it
 behind `kDebugMode`.
 
-**A desktop session can draw no frames.** Find yours with `loginctl
-list-sessions`, then `loginctl show-session <that id> -p LockedHint`. When it says
-`yes`, the autostart (a post-frame callback) never fires, the binary prints nothing
-after the VM service line, and `flutter run -d linux` loses the VM service at once
-("Lost connection to device"); `xvfb-run -a` around either did not help
-(2026-09-29). **The same symptom came back with `LockedHint=no`** (2026-09-30, X11,
-monitor on, `/dev/dri` readable): the window exists but stays unmapped
-(`xwininfo -root -tree | grep yyt_playground`, then `xwininfo -id <window id>`
-prints `Map State: IsUnMapped`), because the generated runner shows it only on the
-first frame and no frame comes. Showing the window before the first frame did not
-help, and a blank app failed the same way, so the host is at fault; the cause is
-unknown.
+**A desktop session can draw no frames.** The symptoms: nothing is printed after
+the VM service line; `flutter run -d linux` says "Lost connection to device";
+`xwininfo -root -tree | grep yyt_playground` finds the window and `xwininfo -id
+<that id>` says `Map State: IsUnMapped` (the runner maps it on the first frame).
+Nothing below writes outside `<scratch>`, the session scratchpad: no `sudo`, no
+`apt`, nothing under `~/.cache`, `~/.config` or `/etc`. A host fix is named in the
+commit's `Verified:` or `Not run:` line and to the user, and left to the owner. Two
+host faults have produced this picture; decide which, in order:
 
-Before blaming the change, run the same two commands on `HEAD` in a scratch copy
-(`git archive HEAD | tar -x -C <scratch>/head`, then `flutter create .
---platforms=linux --project-name yyt_playground --org life.yyt` in its example), and
-a blank app: `flutter create --platforms=linux <scratch>/blank`, then `flutter run
--d linux` in it (`<scratch>` is the session scratchpad; its window is `blank` in
-`xwininfo`). If both fail the same way, commit with the matching line beside the
-levels you did run, and hand the walk to the user:
+1. **The session is locked.** `loginctl list-sessions`, take the id whose `SEAT`
+   is `seat0`, then `loginctl show-session <that id> -p LockedHint`. `yes` means
+   no frame can come (`xvfb-run -a` did not help, 2026-09-29): hand the walk back
+   with the first `Not run:` line below.
+2. **The main thread spins in fontconfig** (2026-09-30 and 2026-10-01; a reboot
+   does not clear it). In `examples/playground`, launch the autostart build in the
+   background (`build/linux/x64/debug/bundle/yyt_playground &`), read `ps -o
+   stat,time -p $(pgrep -n yyt_playground)` twice a few seconds apart — state `R`
+   and a climbing time is a spin — then `pkill -x yyt_playground`. Attaching is
+   refused (`/proc/sys/kernel/yama/ptrace_scope` is 1), so run the binary under
+   gdb and interrupt it:
 
-- `Not run: offline demo on linux — desktop session locked (LockedHint=yes); HEAD and a blank app fail the same way`
-- `Not run: offline demo on linux — window never mapped (LockedHint=no); HEAD and a blank app fail the same way`
+   ```bash
+   timeout -s INT 12 gdb -q --batch -ex run -ex 'thread 1' -ex 'bt 40' \
+     --args build/linux/x64/debug/bundle/yyt_playground
+   ```
+
+   A stack with `FcPatternGetString` under `gtk_widget_realize` is this fault. On
+   this host it comes from foreign `*.cache-12` files with `cache-9`, `-10` and
+   `-11` symlinks in `~/.cache/fontconfig`, which the system fontconfig 2.15 cannot
+   read; without `gdb`, `ls -l ~/.cache/fontconfig` showing those is the same
+   finding. Work around it with a config whose cache lives in `<scratch>`
+   (`/etc/fonts/fonts.conf` itself names the broken cache dir, so include only
+   `conf.d`), written to `<scratch>/fonts.conf`:
+
+   ```xml
+   <?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+   <fontconfig>
+     <dir>/usr/share/fonts</dir><dir>/usr/local/share/fonts</dir>
+     <cachedir><scratch>/fc-cache</cachedir>
+     <include ignore_missing="yes">/etc/fonts/conf.d</include>
+   </fontconfig>
+   ```
+
+   Replace `<scratch>` in the `cachedir` line with the absolute scratchpad path
+   before writing the file. Then `FONTCONFIG_FILE=<scratch>/fonts.conf fc-cache`
+   (the variable on `fc-cache` too, or it writes the host cache) and the same
+   variable in front of the binary or of `flutter run -d linux`. The window maps within twenty seconds;
+   walk under it and say so in the `Verified:` line (fonts are not what the walk
+   proves; without a UI driver, `<steps>` is `autostart only`). If it still does
+   not map, the workaround is not enough: use the third `Not run:` line. The host
+   fix — deleting those cache files and links, then `fc-cache -f` — is the owner's:
+   name it, do not run it.
+
+If the picture matches neither, run the same build and launch on `HEAD` in a scratch
+copy (`mkdir -p <scratch>/head && git archive HEAD | tar -x -C <scratch>/head`,
+then `flutter create . --platforms=linux --project-name yyt_playground --org
+life.yyt` in its example) and
+on a blank app (`flutter create --platforms=linux <scratch>/blank`, then `flutter
+run -d linux` in it; its window is `blank` in `xwininfo -root -tree`). If both fail
+the same way, commit with the matching line beside the levels you did run, and hand
+the walk to the user:
+
+- `Not run: offline demo on linux — desktop session locked (LockedHint=yes)`
+- `Not run: offline demo on linux — window never mapped (LockedHint=no, not fontconfig); HEAD and a blank app fail the same way`
+- `Not run: offline demo on linux — main thread spins in fontconfig; a scratch FONTCONFIG_FILE did not map the window`
+
+The `Verified:` form when the workaround carried the walk (no path: the scratchpad
+path names the account and the session):
+
+- `Verified: offline demo on linux under a scratch FONTCONFIG_FILE (host fontconfig cache still broken), walked <steps>`
 
 If `HEAD` runs, the change is at fault. If only the blank app runs, `HEAD` is
 already broken, which is a separate task (`workflow.md`, "A gate that was already
 red"). Widget tests are not the Linux run.
+
+**Driving the window without `xdotool`.** The host has no `xdotool`, `xte` or
+`ydotool`. Use XTEST through `python-xlib` in a scratch venv (`python3 -m venv
+<scratch>/venv && <scratch>/venv/bin/pip install python-xlib`, which needs the
+network) from a ~20-line helper under `<scratch>`: `d = Xlib.display.Display()`,
+`xtest.fake_input(d, X.MotionNotify, x=x, y=y)`, `X.ButtonPress` / `X.ButtonRelease`
+with detail 1, `X.KeyPress` / `X.KeyRelease` with
+`d.keysym_to_keycode(XK.string_to_keysym(name))` where `name` is a keysym name
+(letters and digits are their own; `-` is `minus`, space `space`, Enter
+`Return`), and `d.sync()` after each. Take screenshots with ImageMagick into
+`<scratch>` — `import -window root <scratch>/root.png` once to find the title
+bar's maximize button, then `import -window <window id> <scratch>/app.png` — and
+read them with the `Read` tool; maximize first so screenshot coordinates stay reproducible.
+The desktop facts that shape the walk (click a tab, open the drawer from its
+button) are in `flutter.md`, "Example mechanics".
 
 ## Against the dev gateway
 
