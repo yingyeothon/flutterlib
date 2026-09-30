@@ -19,9 +19,10 @@ flutter run -d linux
 
 `flutter create .` adds `linux/` (or `android/`, `ios/`, `macos/`, `windows/`, `web/`)
 and touches nothing that is committed: `lib/`, `test/`, `pubspec.yaml`, `README.md`,
-`analysis_options.yaml` (the web one would add `web/**` to the analyzer excludes,
-which is why that line is already there). The offline demo is not available on web
-(the fake gateway needs `dart:io`); everything else is.
+`analysis_options.yaml` (the web one would add `web/**` and the android one
+`android/**` to the analyzer excludes, which is why those lines are already there).
+The offline demo is not available on web (the fake gateway needs `dart:io`);
+everything else is.
 
 ## Configure
 

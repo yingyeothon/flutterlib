@@ -186,9 +186,10 @@ scripts and is **not** written here (`security.md`). Never print the token, neve
 commit a channel id that is not the `0123456789abcdef` fixture.
 
 Prove: `hello` arrives with the channel's capabilities; `pos` answers with a snapshot;
-a second client (the web build, `flutter run -d chrome`, once per release) sees the
-first. Web is the one platform where the subprotocol path runs in a browser; Android
-or iOS is where background-resume reconnect is proven.
+a second client (the web build, once per release) sees the first. Web is the one
+platform where the subprotocol path runs in a browser; Android or iOS is where
+background-resume reconnect is proven. Both run from this host with the Chrome
+extension and the Android emulator: "Web and Android against dev" below.
 
 ## The key-value store against dev
 
@@ -260,14 +261,135 @@ Then write `{"v":2}` into `manifest.json`, sync again, and rerun with
 delete <throwaway>-assets` and `rm <scratch>/key.txt`; record `Verified: dev assets,
 dev_test (v1, then v2)`.
 
-Two checks stay with the owner; an agent does not attempt them and names them in a
-`Not run:` line of the commit. First, the same reads in a browser: the playground's
-**Asset bundle** screen on `flutter run -d chrome`, configured as
-`examples/playground/README.md` says, against a bundle built as in the recipe above
-(`corsSafe` against the real CDN's CORS rules; `dev_test.dart` reads the
-environment through `dart:io` and cannot run there). Second, a resumed download of a
-file over the 2 MiB default `asset.fileBytes`, which needs a platform admin to raise
-the limit and a phone to kill mid-download.
+The browser and emulator checks — the **Asset bundle** screen in Chrome (`corsSafe`
+against the real CDN's CORS rules; `dev_test.dart` reads the environment through
+`dart:io` and cannot run there) and a resumed download over the default
+`asset.fileBytes` — are steps 3 and 6 of the next section.
+
+## Web and Android against dev
+
+Prerequisites, each a `Not run:` line (the list at the end) when missing: the kv and
+asset sections above done first and stopped before their delete and `rm` lines,
+which step 7 runs (so the login, `<throwaway>`, both collections, the encrypted
+bundle with its `key.txt`, the auth channel `kv-it-auth-<yyyymmdd>` and a JWT for it
+in `<scratch>/jwt.txt` are all still there); the Claude in Chrome extension
+(`mcp__claude-in-chrome__*`); an Android emulator (`flutter emulators` lists them,
+`<avd>` below; it needs `/dev/kvm`); `python3 -c 'import tkinter'`. Walked
+2026-10-01 (Flutter 3.47.5, CLI 0.15.0); in this order:
+
+1. **The lobby.** A second between console writes; `rate_limited` means retry that
+   one. `--map-url` refuses a live or an encrypted bundle (`bad_request`), so the
+   map goes in a plain versioned bundle: `<scratch>/map/map.json` in the shape of
+   `examples/playground/README.md` ("The map") with `"zones": ["zone001", "zone002",
+   "zone003"]`, then `yyt asset create <throwaway>-map --mode versioned`, `yyt asset
+   sync <throwaway>-map <scratch>/map --version 1`, and the `map.json` row's URL from
+   `yyt asset files <throwaway>-map 1`. Then `yyt channels create --kind lobby --name
+   web-lobby-<yyyymmdd> --auth-channel <the kv auth channel id> --cap-say zone
+   --cap-say party --cap-say user --max-move-delta 3 --zone zone001 --map-url <that
+   URL> --json` (no secret in a lobby's output; `--zone` must match `[a-z0-9_-]`, so
+   the map's zones are lowercase and the spawn zone is a chip). Mint a second JWT
+   for the same auth channel into `<scratch>/jwt2.txt` the way the first was.
+2. **The defines file.** `<scratch>/defines.json` is a JSON object with the seven
+   `YYT_*` keys of `examples/playground/README.md`: the lobby's `wsUrl` origin and
+   id, `https://auth-dev.yyt.life` and the auth id, `https://doc-dev.yyt.life`, the
+   encrypted bundle's `https://dev-d.yyt.life/assets/<bundleId>/` and its key —
+   composed in the shell, never by reading `key.txt` into a tool argument: `jq -n
+   --rawfile k <scratch>/key.txt --arg ws … '{YYT_ASSET_KEY: ($k | rtrimstr("\n")),
+   YYT_GATEWAY_URL: $ws, …}' > <scratch>/defines.json`. Every build below takes
+   `--dart-define-from-file=<scratch>/defines.json`, which bakes those values into
+   `build/`; step 7 removes them.
+3. **Chrome.** In `examples/playground`: `flutter create . --platforms=web
+   --project-name yyt_playground --org life.yyt`, `flutter build web
+   --dart-define-from-file=…`, then `setsid nohup python3 -m http.server 8087
+   --bind 127.0.0.1 --directory build/web >/dev/null 2>&1 & echo $!` (a plain `&`
+   dies with the tool's shell; keep the pid), and open `http://127.0.0.1:8087/` in the
+   user's Chrome through the extension (`flutter run -d chrome` starts a profile the
+   extension cannot drive). Drive the page with `computer` screenshots and clicks
+   only — the Flutter canvas has no element refs, and the network, console and page
+   readers would put the bearer subprotocol or the pasted token in the transcript.
+   The click frame may not match the screenshot's pixels: hover at a known point,
+   take a screenshot (it shows the cursor), and scale every click by the ratio.
+   **Asset bundle** first (no sign-in): the manifest card, *Read* shows `hello`,
+   *Download* ends at `Downloaded 200000 bytes`, the log has `head` and `segments`
+   lines and no `yak1.`. Then sign in: the auth service sends no CORS headers
+   (`OPTIONS /c/{ch}/verify` is `405`, checked 2026-10-01; the kv routes and the CDN
+   do), so clear the **Auth channel id** field first and *Use this token* takes the
+   unverified path — the app shows `Signed in as (unverified)`, the gateway verifies
+   the JWT itself, and `verify` on web is not run. The token goes through the host
+   clipboard, never through a tool's text argument (that is the transcript): this
+   host has no `xclip`, so `<scratch>/clip.py` is `import sys, tkinter as tk; r =
+   tk.Tk(); r.withdraw(); r.clipboard_clear();
+   r.clipboard_append(open(sys.argv[1]).read().strip()); r.mainloop()`, started
+   as `setsid nohup python3 <scratch>/clip.py <scratch>/jwt.txt >/dev/null 2>&1 &
+   echo $!`; it owns the selection only while it runs, so `kill <pid>` afterwards.
+   Click the JWT field, `ctrl+v`, *Use this token*, **Enter the lobby**: `lobby
+   connected` with the channel id and `tick`, `map loaded`, the chips from the map.
+4. **The emulator.** `flutter emulators --launch <avd>`, `adb wait-for-device shell
+   'until [ "$(getprop sys.boot_completed)" = 1 ]; do sleep 1; done'`, then in
+   `examples/playground`:
+   `flutter create . --platforms=android` with the same `--project-name` and `--org`
+   (the app id is `life.yyt.yyt_playground`), `flutter build apk --debug
+   --dart-define-from-file=…`, `adb install -r
+   build/app/outputs/flutter-apk/app-debug.apk`, `adb shell am start -n
+   life.yyt.yyt_playground/.MainActivity`. Drive it with `adb shell input tap x y`
+   after `adb exec-out screencap -p > <scratch>/emu.png` read with the `Read` tool —
+   before every tap, since the login screen scrolls when the keyboard opens; dismiss
+   the keyboard with its own arrow, because `KEYCODE_BACK` with no keyboard up
+   leaves the app. `adb shell input text` mangles a JWT (`/verify` answers `401`):
+   the emulator shares the host clipboard, so hold `jwt2.txt` there with `clip.py`,
+   long-press the field and tap *Paste* (never screenshot with a paste preview
+   open). `verify` runs natively, so the app shows `Signed in as <32 hex>`. Enter
+   the lobby, move; Chrome shows `1 peer(s) in view` and the peer moving, and the
+   emulator shows Chrome's player.
+5. **Background resume, two runs, record both.** The emulator ends the app's
+   connections within seconds of HOME (a download body fails, the lobby socket
+   closes `1006`) and every handshake fails while it is in the background, so, each
+   followed by a screencap: `adb shell 'input keyevent KEYCODE_HOME; sleep 8; am
+   start -n life.yyt.yyt_playground/.MainActivity'` — the banner goes reconnecting →
+   connected within the first attempts and you are where you were; the same with
+   `sleep 30` — `stopped (1006): handshake failed 5 times in a row`
+   (`maxHandshakeFailures`, 15.5 s ± 20 % of backoff; `flutter.md` says what an app
+   does about it). A real phone may keep the socket longer.
+6. **The resumed download over 2 MiB.** Ask a platform admin (the user) for `yyt
+   limit set asset.fileBytes 64MiB --bundle <throwaway>-assets --expires 1d --note
+   "resume test"` and, since the bundle cap is 20 MiB, `asset.bundleBytes 128MiB`
+   the same way; without it, the `Not run:` line. Sync a 40 MiB `huge.bin` into the
+   encrypted bundle. The playground's *Download* writes into a counting sink and
+   cannot resume, so `flutter create --platforms=android --org life.yyt
+   --project-name resumer <scratch>/resumer` with `yingyeothon_asset_client: {path:
+   <repo>/packages/yingyeothon_asset_client}` (`<repo>` is this checkout's absolute
+   path; same for `_codec` and
+   `_logger`) and `path_provider`, and a `main` that on start prints whether
+   `huge.bin.part` under `getApplicationSupportDirectory()` exists and its length,
+   calls `downloadToFile` with a progress callback that prints the first byte count
+   and then one every 4 MiB, and prints `done <bytes>` — counts only, never the URL,
+   the path or the key. Build it with the same defines file (read with
+   `String.fromEnvironment`), install, start, and once `adb logcat -d -s flutter |
+   tail` shows progress: `adb shell am force-stop life.yyt.resumer`, `am start`
+   again — logcat prints the part's length `N`, a first progress of `N` plus one
+   plaintext segment (65,504 bytes in a keyed bundle), then `done` at the full size.
+   Do not slow the emulator's network to make the window (`adb emu network speed …`
+   stalls every request until `responseTimeout`); the file size is the window.
+7. **Cleanup**, before the emulator closes: `kill` the clipboard holder's and the
+   `http.server`'s pids; hold an empty file in `clip.py` for a few seconds so the
+   emulator's shared clipboard is overwritten (Gboard may keep a history: the JWT
+   dies with the channel below); `adb shell pm clear` and `adb uninstall` both apps;
+   `flutter clean` in the example and `rm -rf <scratch>/resumer`; `rm`
+   `defines.json`, `key.txt` and the token files; `yyt channels delete` the lobby
+   and the auth channel (secrets drop at once), `kv delete` both collections, `asset
+   delete` every bundle (a bundle's limit overrides go with it); `adb emu kill`.
+   Chrome's cache may hold the built `main.dart.js` until it expires; its key is dead
+   with the bundle.
+
+The commit lines:
+
+- `Verified: dev gateway on chrome and <avd>, two clients on one lobby; resume 8 s reconnected, 30 s stopped 1006`
+- `Not run: verify on web (no CORS on /c/{ch}/verify)` — always, beside the first line
+- `Verified: dev assets in chrome; resumed download on <avd> (40 MiB, killed and resumed)`
+- `Not run: dev gateway on chrome — no extension` (also when the extension has no permission for the site)
+- `Not run: dev gateway on android — no emulator`
+- `Not run: dev gateway on chrome and android — no tkinter for the clipboard`
+- `Not run: dev assets, resumed download — no admin for the limit`
 
 ## Method
 

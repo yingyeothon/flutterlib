@@ -30,8 +30,12 @@ The libraries are engine-free; this file is about the app around them.
   written for that: `maxHandshakeFailures` is what ends a dead token, not a status
   code.
 - iOS suspends sockets when the app pauses; Android may. Expect a close on resume and
-  let the reconnect policy run. If you wire `WidgetsBindingObserver`, do it in the app:
-  `close()` on `paused` if you want a clean end, or nothing and let `4002` reconnect.
+  let the reconnect policy run for a short pause. If you wire
+  `WidgetsBindingObserver`, do it in the app: `close()` on `paused`, a new client on
+  `resumed` (`docs/flutter.md` has the wiring; a closed client is spent). Leaving a
+  long pause to the policy fails: handshake failures keep
+  counting in the background, and `maxHandshakeFailures` (5) stops the session about
+  15 s after the OS ends the socket (`manual-verification.md`, "Background resume").
 - `dart:io`'s `WebSocket.done` on a **server** socket does not complete after a
   client-initiated close; the stream's end does. The fake gateway and the transport
   tests read the stream for that reason.
@@ -62,9 +66,11 @@ The libraries are engine-free; this file is about the app around them.
   create `test/widget_test.dart` when absent (the counter test, which fails here), so
   a real test keeps that name. `--platforms=web` does touch one tracked file: it adds
   `web/**` to the analyzer excludes in `analysis_options.yaml` (checked 2026-09-29,
-  Flutter 3.47), so that line is committed — without it CI's clean-tree check after
-  the web `create` fails. A new platform gets the same check: run its `create`,
-  then `git status --porcelain .`.
+  Flutter 3.47), and `--platforms=android` adds `android/**` the same way (checked
+  2026-10-01, Flutter 3.47.5; it also writes an ignored `*.iml`), so both lines are
+  committed: `web/**` for CI's clean-tree check after the web `create`, `android/**`
+  so an emulator run leaves the tree clean. A new platform gets the same check: run
+  its `create`, then `git status --porcelain .`.
 - Desktop input facts (checked 2026-10-01, Flutter 3.47.5, against the SDK's
   `material/drawer.dart` and `material/app_bar.dart`): a drawer never opens from an
   edge drag on linux, macOS or windows, and an `AppBar` adds its automatic drawer

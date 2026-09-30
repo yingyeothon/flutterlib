@@ -92,10 +92,12 @@ count already ends a dead session.
 
 ## App lifecycle
 
-iOS suspends sockets when the app pauses; Android may. Expect a `disconnected` on
-resume and let the policy run — `4002` reconnects. If you want a clean end instead,
-`close()` on `paused` from a `WidgetsBindingObserver` and create a new client on
-`resumed`. [Flutter](flutter.md) has the wiring.
+iOS suspends sockets when the app pauses; Android may. For a short pause, expect a
+`disconnected` on resume and let the policy run — `4002` reconnects. The policy keeps
+counting handshake failures while the app is in the background, so a pause longer
+than its budget (five failures, about 15 s after the OS ends the socket) comes back
+`stopped`: for that, `close()` on `paused` from a `WidgetsBindingObserver` and create
+a new client on `resumed`. [Flutter](flutter.md) has the wiring.
 
 ## Shutting down
 

@@ -5,6 +5,7 @@ analyzer:
     - build/**
     - linux/**
     - web/**
+    - android/**
   language:
     strict-casts: true
     strict-inference: true
