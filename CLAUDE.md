@@ -24,7 +24,9 @@
   `kvstore_client` it is `services/state/README.md` (_KV routes_) and
   `packages/console-db/src/kvstore.ts` there; `KvRules` copies its constants. For
   `asset_client` it is `docs/asset-encryption.md` there, with its vectors, and the
-  browser rules in its `rules/deployment.md`.
+  browser rules in its `rules/deployment.md`. For `auth_client` it is
+  `services/auth/README.md` and `services/auth/src/` there (routes in `app.ts`, the
+  token fragment in `redirect.ts`).
 
 ## Required Rule Lookup
 

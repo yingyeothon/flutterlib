@@ -72,12 +72,16 @@ quote the credential back, so the status is the whole report.
   `newNonce`).
 - `AuthChannelConfig`, `ChannelToken`, `AuthFailure`, `AuthFailureKind`.
 
-## Differences from @yingyeothon/lambda-authorizer and the csharplib SignIn sample
+## Differences from @yingyeothon/lambda-authorizer and Yingyeothon.Auth
 
 - tslib's authorizer packages are the *server* half (verifying a bearer on API
-  Gateway) and are not ported. csharplib kept sign-in as a sample outside the SDK.
-  Here it is a package, because a Flutter app's default path is the browser redirect,
-  and nonce checking, fragment parsing and "never log the body" are exactly the code a
-  game copies wrong.
+  Gateway) and are not ported. Here it is a package, because a Flutter app's default
+  path is the browser redirect, and nonce checking, fragment parsing and "never log
+  the body" are exactly the code a game copies wrong. csharplib's `Yingyeothon.Auth`
+  (`com.yingyeothon.auth-client`) is modelled on this package; its README lists where
+  it departs.
+- `ChannelToken.expiresAt` is a `DateTime` here, with the seconds in `exp`, and Unix
+  seconds in csharplib, because a Dart caller compares it with `DateTime.now()`.
+  `AuthChannelConfig.expiresAt` is Unix seconds in both, so mind the name.
 - The nonce rides in the redirect's query string; the auth service matches the
   allowlist on origin and path prefix, so a query is admitted.

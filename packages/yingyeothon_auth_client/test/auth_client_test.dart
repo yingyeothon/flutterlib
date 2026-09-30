@@ -40,13 +40,17 @@ void main() {
   });
 
   test('fetchConfig reads every field and keeps raw', () async {
+    // The shape services/auth/src/app.ts sends: callbackUrls by provider,
+    // expiresAt in Unix seconds.
     fake.answer(
       200,
       '''
       {"channelId":"auth_0123456789abcdef","issuer":"iss","audience":"aud",
-       "tokenTtlSec":86400,"providers":["github"],"callbackUrls":["https://auth.example/cb"],
+       "tokenTtlSec":86400,"providers":["github","google"],
+       "callbackUrls":{"github":"https://auth.example/c/auth_0123456789abcdef/github/callback",
+                       "google":"https://auth.example/c/auth_0123456789abcdef/google/callback"},
        "startUrl":"https://auth.example/c/auth_0123456789abcdef/start",
-       "redirectAllowlist":["https://game.example/"],"expiresAt":"2026-12-31T00:00:00Z","extra":1}''',
+       "redirectAllowlist":["https://game.example/"],"expiresAt":1798675200,"extra":1}''',
     );
     final config = await client.fetchConfig();
     expect(
@@ -58,13 +62,53 @@ void main() {
     expect(config.issuer, 'iss');
     expect(config.audience, 'aud');
     expect(config.tokenTtlSec, 86400);
-    expect(config.providers, ['github']);
-    expect(config.callbackUrls, ['https://auth.example/cb']);
+    expect(config.providers, ['github', 'google']);
+    expect(config.callbackUrls, {
+      'github': 'https://auth.example/c/auth_0123456789abcdef/github/callback',
+      'google': 'https://auth.example/c/auth_0123456789abcdef/google/callback',
+    });
     expect(config.startUrl, endsWith('/start'));
     expect(config.redirectAllowlist, ['https://game.example/']);
-    expect(config.expiresAt, DateTime.utc(2026, 12, 31));
+    expect(config.expiresAt, 1798675200); // 2026-12-31T00:00:00Z
     expect(config.raw['extra'], 1);
   });
+
+  test('fetchConfig keeps the no-expiry sentinel as sent', () async {
+    // CHANNEL_NO_EXPIRY_SEC in the service's packages/core/src/channel.ts.
+    expect(AuthChannelConfig.noExpirySec, 253402300799);
+    fake.answer(200, '{"expiresAt":253402300799}');
+    final config = await client.fetchConfig();
+    expect(config.expiresAt, AuthChannelConfig.noExpirySec);
+  });
+
+  test(
+    'fetchConfig reads a missing or mistyped field as empty or null',
+    () async {
+      fake.answer(200, '{}');
+      final empty = await client.fetchConfig();
+      expect(empty.callbackUrls, isEmpty);
+      expect(empty.expiresAt, isNull);
+
+      // The shapes this package once read, and a non-string URL, are dropped.
+      fake.answer(
+        200,
+        '{"callbackUrls":["https://auth.example/cb"],'
+        '"expiresAt":"2026-12-31T00:00:00Z"}',
+      );
+      final legacy = await client.fetchConfig();
+      expect(legacy.callbackUrls, isEmpty);
+      expect(legacy.expiresAt, isNull);
+
+      fake.answer(
+        200,
+        '{"callbackUrls":{"github":"https://auth.example/cb","google":1},'
+        '"expiresAt":1.5}',
+      );
+      final mixed = await client.fetchConfig();
+      expect(mixed.callbackUrls, {'github': 'https://auth.example/cb'});
+      expect(mixed.expiresAt, isNull);
+    },
+  );
 
   test('buildStartUrl puts the nonce in the redirect query', () {
     final url = client.buildStartUrl(

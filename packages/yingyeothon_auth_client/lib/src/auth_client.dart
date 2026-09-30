@@ -22,21 +22,26 @@ final class AuthChannelConfig {
     this.expiresAt,
   });
 
-  /// Reads the config object. Missing fields read as empty.
+  /// Reads the config object. Missing or mistyped fields read as empty, and
+  /// [expiresAt] as `null`.
   factory AuthChannelConfig.fromJson(JsonObject json) {
     List<String> strings(String key) =>
         json.getListOrEmpty(key).whereType<String>().toList(growable: false);
-    final expires = json.getString('expiresAt');
+    final callbacks =
+        json.getObject('callbackUrls') ?? const <String, Object?>{};
     return AuthChannelConfig(
       channelId: json.getString('channelId') ?? '',
       issuer: json.getString('issuer') ?? '',
       audience: json.getString('audience') ?? '',
       tokenTtlSec: json.getInt('tokenTtlSec') ?? 0,
       providers: strings('providers'),
-      callbackUrls: strings('callbackUrls'),
+      callbackUrls: Map<String, String>.unmodifiable({
+        for (final MapEntry(:key, :value) in callbacks.entries)
+          if (value is String) key: value,
+      }),
       startUrl: json.getString('startUrl') ?? '',
       redirectAllowlist: strings('redirectAllowlist'),
-      expiresAt: expires == null ? null : DateTime.tryParse(expires),
+      expiresAt: json.getInt('expiresAt'),
       raw: json,
     );
   }
@@ -56,8 +61,9 @@ final class AuthChannelConfig {
   /// Providers the channel enables: `github`, `google`.
   final List<String> providers;
 
-  /// Provider callback URLs registered for this channel.
-  final List<String> callbackUrls;
+  /// The callback URL to register with each provider's OAuth app, by provider
+  /// name (`github` → `…/c/{channelId}/github/callback`).
+  final Map<String, String> callbackUrls;
 
   /// The `/start` URL, absolute.
   final String startUrl;
@@ -65,8 +71,17 @@ final class AuthChannelConfig {
   /// URL prefixes a `redirect` must match.
   final List<String> redirectAllowlist;
 
-  /// When the channel expires, if it does.
-  final DateTime? expiresAt;
+  /// When the channel expires, as Unix seconds — like [ChannelToken.exp], not a
+  /// `DateTime` like [ChannelToken.expiresAt].
+  ///
+  /// The service sends [noExpirySec] for a channel without an expiry; compare
+  /// with `>=`, as the service does. `null` means the reply carried no usable number, not "never"
+  /// as a `null` expiry means in the key-value store.
+  final int? expiresAt;
+
+  /// The [expiresAt] of a channel granted no expiry: 9999-12-31T23:59:59Z
+  /// (`CHANNEL_NO_EXPIRY_SEC` in the service).
+  static const int noExpirySec = 253402300799;
 
   /// The object as received.
   final JsonObject raw;

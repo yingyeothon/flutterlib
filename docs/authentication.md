@@ -15,7 +15,8 @@ URLs it will hand a token back to. A player signs in through that provider, the 
 service issues a JWT for your channel, and you put it in `GatewayClientOptions.token`.
 
 `fetchConfig()` reads `GET /c/{authChannelId}/.well-known/config` — unauthenticated —
-so the app hard-codes only a base URL and a channel id.
+so the app hard-codes only a base URL and a channel id. When you register the OAuth
+app, give it `callbackUrls[provider]` from that config as its callback URL.
 
 ## The browser redirect flow
 

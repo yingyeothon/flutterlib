@@ -75,6 +75,15 @@
   'disconnected:4002:true', 'reconnecting:1:500', ...])`, not counts.
 - **Pin wire bytes.** A sender test compares `sentRaw` to the exact JSON string; a
   round-trip proves nothing about what the gateway sees.
+- **Copy a reply fixture you add or change from the service code that builds it**
+  (the route handler; for a gateway frame, its struct in `protocol.go`), **never from
+  the parser**, and name that file in a comment above the fixture. A fixture written
+  the way the parser reads passes whatever the parser reads, and the codec getters
+  read a mismatched type as `null` or empty, so the real reply then fails silently
+  rather than throwing: `AuthChannelConfig` read `callbackUrls` as a list and
+  `expiresAt` as a date string, and so did its fixture, while the service sends an
+  object and Unix seconds. `architecture.md` (kv) and `documentation.md` (the
+  gateway) apply the same rule to claims.
 - **A timer an operation arms is cancelled when the operation settles.** A
   `Future.delayed` raced with `Future.any` never is; use `.timeout(...)`
   (`architecture.md`) or a `Timer` + `Completer` cancelled in `finally`, and pin it
