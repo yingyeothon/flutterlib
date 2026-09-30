@@ -11,7 +11,7 @@
       git:
         url: https://github.com/yingyeothon/flutterlib.git
         path: packages/yingyeothon_gamebase_client
-        ref: v0.1.0
+        ref: vX.Y.Z
   ```
 
   Nothing is published to pub.dev and no CI job holds a publish credential. If that
@@ -26,11 +26,13 @@
 
 1. The green gate and the manual verification (`manual-verification.md`) on the commit
    to be tagged — the offline demo, and the dev gateway when possible.
-2. Bump `version:` in every `packages/*/pubspec.yaml` and `tool/pubspec.yaml`. Add
-   `ref: vX.Y.Z` to every `## Install` snippet (none carries one before the first
-   release) and to the snippets in `README.md` and `docs/getting-started.md`, and
-   delete their "until a release is tagged" sentences; on a later release, update the
-   `ref:` values instead.
+2. Bump `version:` in every `packages/*/pubspec.yaml` and `tool/pubspec.yaml`
+   (`examples/playground/pubspec.yaml` is the app's own version: leave it). Then, by
+   hand — nothing gates these — set `ref: vX.Y.Z` in every git `## Install` snippet
+   (every package README except `fake_gateway`'s, `README.md`,
+   `docs/getting-started.md`; `git grep -n 'ref: v'` lists them, plus this file's
+   two prose lines), and set `fake_gateway`'s workspace dev-dependency snippet to
+   `^X.Y.Z` (`git grep -n 'fake_gateway: ^'`; it takes no `ref:`).
 3. Commit that as its own commit (`Release vX.Y.Z`). **The agent stops here**: it does
    not tag.
 4. The user runs:
