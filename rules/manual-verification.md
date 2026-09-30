@@ -102,12 +102,15 @@ host faults have produced this picture; decide which, in order:
    ```
 
    A stack with `FcPatternGetString` under `gtk_widget_realize` is this fault. On
-   this host it comes from foreign `*.cache-12` files with `cache-9`, `-10` and
+   this host it came from foreign `*.cache-12` files with `cache-9`, `-10` and
    `-11` symlinks in `~/.cache/fontconfig`, which the system fontconfig 2.15 cannot
    read; without `gdb`, `ls -l ~/.cache/fontconfig` showing those is the same
-   finding. Work around it with a config whose cache lives in `<scratch>`
-   (`/etc/fonts/fonts.conf` itself names the broken cache dir, so include only
-   `conf.d`), written to `<scratch>/fonts.conf`:
+   finding. The owner removed them on 2026-10-01 and the window mapped again with
+   no workaround, so a recurrence means something wrote them back: name it in the
+   commit's `Verified:` or `Not run:` line and to the user. Work around it with a
+   config whose cache lives in `<scratch>` (`/etc/fonts/fonts.conf` itself names
+   the broken cache dir, so include only `conf.d`), written to
+   `<scratch>/fonts.conf`:
 
    ```xml
    <?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
