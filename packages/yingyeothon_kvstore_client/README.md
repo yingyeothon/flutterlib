@@ -29,6 +29,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_kvstore_client
+      ref: v0.1.0
 ```
 
 ## Usage

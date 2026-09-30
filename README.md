@@ -91,7 +91,8 @@ on the service's 2026-09-09 additions (its README says which).
 
 ## Install
 
-Until a release is tagged, depend on `main` by git; append `ref: <tag>` to pin one.
+Depend on the packages by git, pinned to a release tag with `ref:`; use the same
+`ref:` on every entry, or drop it from all of them to track `main`.
 A package's siblings are relative path dependencies inside the same checkout, so one
 git dependency per package you use is enough:
 
@@ -101,21 +102,25 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_gamebase_client
+      ref: v0.1.0
   yingyeothon_auth_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_auth_client
+      ref: v0.1.0
   yingyeothon_kvstore_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_kvstore_client
+      ref: v0.1.0
   yingyeothon_asset_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_asset_client
+      ref: v0.1.0
 ```
 
-**No release has been tagged yet**, so these track `main`. Nothing is on pub.dev.
+Nothing is on pub.dev.
 
 ## Development
 

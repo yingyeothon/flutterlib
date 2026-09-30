@@ -12,16 +12,17 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_gamebase_client
+      ref: v0.1.0
   yingyeothon_auth_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_auth_client
+      ref: v0.1.0
 ```
 
-Append `ref: v0.1.0` (or the tag you want) to each once a release exists; until then
-they track `main`. The siblings each one needs (`codec`, `logger`) are path
-dependencies inside the same checkout, so nothing else is declared. The packages are
-pure Dart, so this works on every platform.
+The siblings each one needs (`codec`, `logger`) are path dependencies inside the same
+checkout, so nothing else is declared; keep every entry on the same `ref:`. The
+packages are pure Dart, so this works on every platform.
 
 ## 2. Collect four values from the console
 
