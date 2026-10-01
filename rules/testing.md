@@ -12,7 +12,8 @@
 - Test files live in `packages/<name>/test/`, import only the public barrel, and share
   doubles from `packages/yingyeothon_gamebase_client/test/support/` (the other
   packages keep theirs in their own `test/`, inline or in one support file such as
-  `kvstore_client/test/fake_http_client.dart`). If a test needs something internal,
+  `kvstore_client/test/fake_http_client.dart`, which `leaderboard_client/test/`
+  carries as a copy). If a test needs something internal,
   that thing should be public or the test is testing the wrong layer.
 
 ## Doubles

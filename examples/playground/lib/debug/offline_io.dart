@@ -30,6 +30,10 @@ final Map<String, Object?> demoMapDocument = <String, Object?>{
 /// The demo's asset bundle id, and its files: a manifest, a text file and a
 /// binary of five 64 KiB segments, so a download reports progress.
 const String demoBundleId = 'ab_demo';
+
+/// The demo's leaderboard: `submit: owner`, `best`, `desc`, alltime and
+/// weekly, seeded with three peers' scores.
+const String demoBoard = 'race';
 const String demoText = 'Hello from an encrypted asset bundle.';
 
 Map<String, List<int>> _demoAssetFiles() {
@@ -95,6 +99,17 @@ class OfflineDemo {
             name: 'profile',
             readScope: 'user',
             writeScope: 'user',
+          ),
+        ],
+        leaderboards: const <FakeLeaderboard>[
+          // The guide's case: a board players write their own row to.
+          FakeLeaderboard(
+            name: demoBoard,
+            submit: 'owner',
+            rule: 'best',
+            order: 'desc',
+            periods: <String>['alltime', 'weekly'],
+            scores: <String, int>{'seed-1': 80, 'seed-2': 60, 'seed-3': 60},
           ),
         ],
         assetBundles: <FakeAssetBundle>[

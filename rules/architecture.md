@@ -126,8 +126,8 @@
   `incr` bounds, `GET /time`); it went unported for three weeks, and meanwhile
   `isUserNamespace` read `writeScope` alone while the service's `isKvPerOwner` takes
   either scope, so a mail collection got the wrong path. Every later commit up to
-  `a3fa068` was read on 2026-09-30 and changes no route a client calls (console caps,
-  the `/lb` and `/social` stacks). Before kv work, fetch the `service` repository and
+  `a3fa068` was read on 2026-09-30 and changes no kv route (console caps, and the
+  `/lb` and `/social` stacks, which have clients of their own since 2026-10-01). Before kv work, fetch the `service` repository and
   run, as one line:
 
   ```bash
@@ -155,6 +155,44 @@
   which is what makes a refusal synchronous and leak-free; the twin passes
   `token: null`, takes the factory's defaults, owns its client only when none was
   passed, and closes what it owns when the request settles.
+
+## The leaderboard client (`leaderboard_client`)
+
+- The same host, token and shape as the key-value client: one requester
+  (`internal/requester.dart`), one `debug` line per request (method, route *kind*,
+  status, bytes — never the board, the owner, a score or a `meta`), grammars in
+  `LbRules` cited to `packages/console-db/src/leaderboard.ts` (the owner grammar
+  from `kvstore.ts`, as the service's `checkOwnerId` is kv's), and an exception
+  that is a status, a code and a `details.reason` word. A change to one requester
+  is a change to both: before editing either, `diff` the two
+  `lib/src/internal/requester.dart` files (they differ in names, in the kv-only
+  answer headers and `headers:` parameter, and in the 4 MiB versus 1 MiB cap) and
+  make the same change to the exchange, the exception mapping and the log line
+  in the other.
+- **A client never names a bucket key.** The API takes a period *name*, the
+  platform computes the key in `Asia/Seoul` and every answer carries `periodKey`
+  and `periodEndsAt` (`null` for alltime, so the field is nullable); the fake
+  computes them the same way (`periodKey` on `FakeLeaderboardStore`, pinned in its
+  test at the two ISO-week boundaries the service pins in
+  `packages/console-db/test/leaderboard.test.ts`: `2027-01-01` → `2026-W53` and
+  `2024-12-30` → `2025-W01`).
+- `meta` is text: sent as a JSON string, never an object, so an integer past 2^53
+  round-trips; the client refuses a control character and more than 1 KiB locally
+  because the service does, and nothing else about it.
+- The board is resolved before the credential *rule*: a player on a `submit:
+  server` board that does not exist is a `404`, not a `403`, so an id is never an
+  oracle. Identity itself (`401`) comes first in both.
+- Read up to service `fcb8f49` (2026-10-01; a rules commit touching no lb path,
+  so it is the read watermark, and the port is of the routes as they stood).
+  Before leaderboard work, fetch the `service` repository and run, as one line:
+
+  ```bash
+  git -C ~/git/yyt.life/service log --oneline fcb8f49..origin/main -- services/state/src/leaderboard.ts services/state/README.md packages/console-db/src/leaderboard.ts docs/leaderboard.md
+  ```
+
+  Read every commit it lists, port what a client can see into the client and the
+  fake, then replace `fcb8f49` in this bullet (both places) with the newest commit
+  you read. An empty list changes nothing here.
 
 ## Seams
 

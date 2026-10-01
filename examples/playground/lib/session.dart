@@ -7,6 +7,7 @@ import 'package:yingyeothon_asset_client/yingyeothon_asset_client.dart';
 import 'package:yingyeothon_auth_client/yingyeothon_auth_client.dart';
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 import 'package:yingyeothon_kvstore_client/yingyeothon_kvstore_client.dart';
+import 'package:yingyeothon_leaderboard_client/yingyeothon_leaderboard_client.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 
 import 'config.dart';
@@ -569,6 +570,84 @@ class Session extends ChangeNotifier {
     if (notify) notifyListeners();
   }
 
+  // ---- leaderboard ---------------------------------------------------------
+
+  /// The leaderboard client for the current token; a new token is a new
+  /// client. Same host as the key-value store.
+  LeaderboardClient? lb;
+
+  /// The board the screen shows; the offline demo seeds `race`.
+  static const String boardName = 'race';
+
+  /// The board's shape; `null` until read.
+  LeaderboardInfo? boardInfo;
+
+  /// The ranked page last read; `null` until read.
+  LbPage? boardPage;
+
+  /// This player's own row; `null` until read or when absent.
+  LbScore? myScore;
+
+  /// Whether the last read found no row of mine.
+  bool myScoreAbsent = false;
+
+  /// Creates (or recreates) the client from the config and the token.
+  LeaderboardClient openLb() {
+    final jwt = token?.jwt;
+    if (jwt == null) throw StateError('sign in first');
+    if (!config.canUseKv) throw StateError('key-value base URL is required');
+    // tryParse: a FormatException would quote the pasted text.
+    final baseUrl = Uri.tryParse(config.kvBaseUrl);
+    if (baseUrl == null) throw StateError('key-value base URL is not a URL');
+    closeLb();
+    final client = LeaderboardClient(
+      LeaderboardClientOptions(baseUrl: baseUrl, token: jwt, logger: logger),
+    );
+    lb = client;
+    notifyListeners();
+    return client;
+  }
+
+  /// Reads the shape, the first period's page and my own row.
+  Future<void> loadBoard() async {
+    final board = (lb ?? openLb()).board(boardName);
+    boardInfo = await board.info();
+    boardPage = await board.top();
+    final mine = await board.score();
+    myScore = mine;
+    myScoreAbsent = mine == null;
+    note(
+      'leaderboard: ${boardPage!.total} rows'
+      '${mine == null ? ', no row of mine' : ', my rank ${mine.rank}'}',
+    );
+    notifyListeners();
+  }
+
+  /// Submits my score, then reads the board again so what is shown is what
+  /// is stored (on a `best` board a worse score changes nothing).
+  Future<void> submitScore(int score) async {
+    final board = (lb ?? openLb()).board(boardName);
+    final result = await board.submit(score);
+    // Numbers only: a bucket's period name is a string off the wire.
+    note(
+      'leaderboard: submitted ${result.submitted}, stored '
+      '${result.periods.map((p) => p.score).join('/')} over '
+      '${result.periods.length} bucket(s)',
+    );
+    await loadBoard();
+  }
+
+  /// [notify] as in [closeKv].
+  void closeLb({bool notify = true}) {
+    lb?.close();
+    lb = null;
+    boardInfo = null;
+    boardPage = null;
+    myScore = null;
+    myScoreAbsent = false;
+    if (notify) notifyListeners();
+  }
+
   // ---- assets --------------------------------------------------------------
 
   /// The reader for the configured bundle; the CDN needs no token.
@@ -670,6 +749,8 @@ class Session extends ChangeNotifier {
     unawaited(closeGame());
     kv?.close();
     kv = null;
+    lb?.close();
+    lb = null;
     assets?.close();
     assets = null;
     super.dispose();

@@ -27,6 +27,13 @@ bool get offlineAutostartKv =>
     offlineDemoAvailable &&
     const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_KV', defaultValue: false);
 
+/// `--dart-define=YYT_OFFLINE_AUTOSTART_LB=true` (debug builds only): start
+/// the offline demo and open the leaderboard screen, which then submits one
+/// score, so the case is walked with no input tooling.
+bool get offlineAutostartLb =>
+    offlineDemoAvailable &&
+    const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_LB', defaultValue: false);
+
 /// The close codes the debug drawer offers.
 const List<int> forcedCloseCodes = <int>[4000, 4002, 4004, 4005, 1001];
 

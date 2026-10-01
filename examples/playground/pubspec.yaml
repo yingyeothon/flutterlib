@@ -22,6 +22,8 @@ dependencies:
     path: ../../packages/yingyeothon_gamebase_client
   yingyeothon_kvstore_client:
     path: ../../packages/yingyeothon_kvstore_client
+  yingyeothon_leaderboard_client:
+    path: ../../packages/yingyeothon_leaderboard_client
   yingyeothon_logger:
     path: ../../packages/yingyeothon_logger
 

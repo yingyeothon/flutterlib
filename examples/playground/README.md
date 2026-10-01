@@ -3,9 +3,10 @@
 One Flutter app that exercises every package: sign in through the auth channel (or
 paste a token), join a lobby (zone map, chat, parties), run a dungeon `q` session,
 watch the reconnect and stop banners, read announcements and save your settings in
-the key-value store, and read and download files of an encrypted asset bundle. In a debug build an **Offline demo** starts
-`yingyeothon_fake_gateway` in the process, so all of it runs with no credential and no
-network.
+the key-value store, submit a score to a leaderboard and read your rank, and read
+and download files of an encrypted asset bundle. In a debug build an **Offline
+demo** starts `yingyeothon_fake_gateway` in the process, so all of it runs with no
+credential and no network.
 
 ## Build
 
@@ -43,6 +44,11 @@ flutter run -d linux \
 The **Key-value store** screen expects two collections in your project, created in
 the console: `announcements` (readScope `project`, writeScope `team`) and `profile`
 (readScope `user`, writeScope `user`). The offline demo seeds both.
+
+The **Leaderboard** screen expects a `submit: owner` board named `race` in your
+project (`yyt lb create race --submit owner`); it submits your score, shows the
+first period's page and your rank, and the offline demo seeds one with three peers.
+The same `YYT_KV_BASE_URL` serves it.
 
 The **Asset bundle** screen reads `manifest.json`, reads `hello.txt` whole and
 downloads `big.bin` with progress, from the bundle at `YYT_ASSET_BASE_URL`; sync those
@@ -123,7 +129,7 @@ and is left to its own policy.
 
 | Where | Hook | Effect |
 | --- | --- | --- |
-| Login | Offline demo | starts the fake gateway (lobby, `q`, `/kv/*` and an encrypted bundle under `/assets/*`), fills the config, signs you in as `you` |
+| Login | Offline demo | starts the fake gateway (lobby, `q`, `/kv/*`, the `race` board under `/lb/*` and an encrypted bundle under `/assets/*`), fills the config, signs you in as `you` |
 | Lobby → debug drawer (the bug icon at the end of the app bar) | Seed peers | three extra identities join your zone and wander |
 | Lobby → debug drawer | Force close 4000 / 4002 / 4004 / 4005 / 1001 | the fake closes your socket with that code |
 | Dungeon | Abort (4001) / Finish (1000) | the fake closes your `q` socket |
@@ -132,7 +138,8 @@ and is left to its own policy.
 `--dart-define=YYT_OFFLINE_AUTOSTART=true` starts the offline demo, enters the lobby
 and seeds the peers on launch, for a smoke run or a screenshot with no input tooling;
 `--dart-define=YYT_OFFLINE_AUTOSTART_KV=true` does the same for the key-value screen
-and saves one settings record.
+and saves one settings record; `--dart-define=YYT_OFFLINE_AUTOSTART_LB=true` for the
+leaderboard screen, submitting one score.
 
 A `--release` build has none of these.
 
@@ -145,7 +152,7 @@ lib/
   session.dart         ChangeNotifier owning the clients, the map and the log
   map_layout.dart      the playground's reading of the map document
   debug/               kDebugMode-only: offline demo, seeding, forced closes
-  screens/             login, lobby, dungeon, key-value store, asset bundle
+  screens/             login, lobby, dungeon, key-value store, leaderboard, asset bundle
   widgets/             zone map painter, chat, party panel, banners, log panel
 test/                  widget tests against the fake gateway
 ```

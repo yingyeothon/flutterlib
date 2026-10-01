@@ -38,6 +38,7 @@ handle it.
 | [Authentication](docs/authentication.md) | how a client gets its channel JWT |
 | [Lobby](docs/lobby.md) / [Dungeon](docs/dungeon.md) | the two channel kinds, feature by feature |
 | [Key-value store](docs/kvstore.md) | announcements, a player's own record, mail and the platform clock, with the same token |
+| [Leaderboards](docs/leaderboard.md) | submit a score, read a ranked page and your own rank, with the same token |
 | [Asset bundles](docs/assets.md) | game files from the CDN, encrypted or not: a manifest, a range, a resumable download |
 | [Connection lifecycle](docs/connection-lifecycle.md) | states, events, reconnect, backoff |
 | [Errors](docs/errors.md) / [Troubleshooting](docs/troubleshooting.md) | every refusal, close code and symptom |
@@ -54,6 +55,7 @@ handle it.
 | [yingyeothon_gamebase_client](packages/yingyeothon_gamebase_client) | Client SDK for the yyt realtime gateway (lobby + dungeon `q`) |
 | [yingyeothon_auth_client](packages/yingyeothon_auth_client) | The client half of the auth channel: config, sign-in URL, redirect, exchange, verify |
 | [yingyeothon_kvstore_client](packages/yingyeothon_kvstore_client) | Client for the yyt key-value store: collections by name, `me` namespace, versions, TTL, `incr`, mail, `serverTime` |
+| [yingyeothon_leaderboard_client](packages/yingyeothon_leaderboard_client) | Client for yyt leaderboards: a board by name, `submit`, a ranked `top` page, your own `score` and rank, the server's deletes |
 | [yingyeothon_asset_client](packages/yingyeothon_asset_client) | Reader for asset bundles on the CDN: whole files, JSON, ranges, resumable downloads; decrypts and verifies `yyt-enc v1` |
 | [yingyeothon_fake_gateway](packages/yingyeothon_fake_gateway) | In-process gateway for tests and the offline demo; never published |
 
@@ -67,6 +69,8 @@ graph LR
   yingyeothon_auth_client --> yingyeothon_codec
   yingyeothon_kvstore_client --> yingyeothon_codec
   yingyeothon_kvstore_client --> yingyeothon_logger
+  yingyeothon_leaderboard_client --> yingyeothon_codec
+  yingyeothon_leaderboard_client --> yingyeothon_logger
   yingyeothon_asset_client --> yingyeothon_codec
   yingyeothon_asset_client --> yingyeothon_logger
   yingyeothon_fake_gateway --> yingyeothon_codec
@@ -88,6 +92,9 @@ runs with no credential. `yingyeothon_kvstore_client` and `yingyeothon_asset_cli
 are the Dart ports of tslib's `kvstore-client` and `asset-client`, with the same shape
 and vocabulary in every language that has them; the key-value client is ahead of both
 on the service's 2026-09-09 additions (its README says which).
+`yingyeothon_leaderboard_client` has no original in either: the service's `/lb/*`
+routes are newer than both libraries, so the Dart client came first (owner decision,
+2026-10-01) and keeps the service's vocabulary for the ports to follow.
 
 ## Install
 
@@ -117,6 +124,11 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_asset_client
+      ref: v0.1.0
+  yingyeothon_leaderboard_client:
+    git:
+      url: https://github.com/yingyeothon/flutterlib.git
+      path: packages/yingyeothon_leaderboard_client
       ref: v0.1.0
 ```
 

@@ -6,6 +6,7 @@ import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 
 import 'fake_assets.dart';
 import 'fake_kv.dart';
+import 'fake_leaderboard.dart';
 
 /// A `q` connection as the game-side hook sees it.
 abstract interface class GameSession {
@@ -48,6 +49,7 @@ final class FakeGatewayOptions {
     this.onGameFrame,
     this.maxPeers = 64,
     this.kvCollections = const <FakeKvCollection>[],
+    this.leaderboards = const <FakeLeaderboard>[],
     this.assetBundles = const <FakeAssetBundle>[],
     this.channels,
     this.games,
@@ -81,6 +83,9 @@ final class FakeGatewayOptions {
 
   /// The collections `/kv/*` serves; empty means every kv route is a `404`.
   final List<FakeKvCollection> kvCollections;
+
+  /// The boards `/lb/*` serves; empty means every lb route is a `404`.
+  final List<FakeLeaderboard> leaderboards;
 
   /// The bundles `/assets/{id}/…` serves; any other path there is a `403`.
   final List<FakeAssetBundle> assetBundles;
@@ -124,6 +129,9 @@ abstract interface class FakeGateway {
 
   /// The in-memory store behind `/kv/*`, to read what a client wrote.
   FakeKvStore get kv;
+
+  /// The in-memory boards behind `/lb/*`, on the same origin as [kvUrl].
+  FakeLeaderboardStore get lb;
 
   /// `http://127.0.0.1:port/assets/`; a bundle's base URL for
   /// `AssetBundleClientOptions.baseUrl` is this plus its id and a `/`.
@@ -286,6 +294,12 @@ final class _FakeGateway implements FakeGateway {
         userIdOf: _userIdOf,
         acceptedTokens: _options.acceptedTokens,
       ),
+      lb = FakeLeaderboardStore(
+        _options.leaderboards,
+        userIdOf: _userIdOf,
+        acceptedTokens: _options.acceptedTokens,
+        clock: _options.clock,
+      ),
       _assets = FakeAssetStore(_options.assetBundles) {
     _flush = Timer.periodic(
       Duration(milliseconds: _options.tick),
@@ -304,6 +318,8 @@ final class _FakeGateway implements FakeGateway {
   final FakeGatewayOptions _options;
   @override
   final FakeKvStore kv;
+  @override
+  final FakeLeaderboardStore lb;
   final FakeAssetStore _assets;
   late final Timer _flush;
   final Map<String, _LobbyConnection> _lobby = <String, _LobbyConnection>{};
@@ -428,6 +444,10 @@ final class _FakeGateway implements FakeGateway {
       }
       if (FakeKvStore.handles(request.uri.path)) {
         await kv.handle(request);
+        return;
+      }
+      if (FakeLeaderboardStore.handles(request.uri.path)) {
+        await lb.handle(request);
         return;
       }
       if (FakeAssetStore.handles(request.uri.path)) {

@@ -7,11 +7,12 @@
   [csharplib](https://github.com/yingyeothon/csharplib): `packages/yingyeothon_*` are
   pure Dart (no Flutter import) so `dart test` covers them, and `examples/playground`
   is the Flutter app that shows them wired together.
-- Eight packages in one pub workspace: `codec`, `logger`, `event_broker`,
+- Nine packages in one pub workspace: `codec`, `logger`, `event_broker`,
   `gamebase_client` (the gateway SDK), `auth_client`, `kvstore_client` (the key-value
-  store client), `asset_client` (the CDN asset-bundle reader), and `fake_gateway` (an
-  in-process gateway, `/kv/*` store and `/assets/*` CDN for tests and the offline
-  demo; never published).
+  store client), `leaderboard_client` (the `/lb/*` client), `asset_client` (the CDN
+  asset-bundle reader), and `fake_gateway` (an in-process gateway, `/kv/*` store,
+  `/lb/*` boards and `/assets/*` CDN for tests and the offline demo; never
+  published).
 - Source of truth documents:
   - `CONVENTIONS.md` — Dart API design rules. Canonical; do not restate or contradict.
   - `README.md` — what the library is for, the package list and the dependency graph.
@@ -23,6 +24,9 @@
   `gateway/internal/lobby/protocol.go` in the `service` repository, not tslib. For
   `kvstore_client` it is `services/state/README.md` (_KV routes_) and
   `packages/console-db/src/kvstore.ts` there; `KvRules` copies its constants. For
+  `leaderboard_client` it is the same README (_LB routes_),
+  `services/state/src/leaderboard.ts` and `packages/console-db/src/leaderboard.ts`
+  there; `LbRules` copies its constants. For
   `asset_client` it is `docs/asset-encryption.md` there, with its vectors, and the
   browser rules in its `rules/deployment.md`. For `auth_client` it is
   `services/auth/README.md` and `services/auth/src/` there (routes in `app.ts`, the

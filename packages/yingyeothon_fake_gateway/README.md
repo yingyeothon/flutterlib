@@ -6,11 +6,14 @@ closely enough to drive `yingyeothon_gamebase_client` end to end over the real
 transport: the bearer subprotocol handshake, `hello`, zones and the peer-map frames,
 chat and events by scope, parties with the gateway's `omitempty` marshalling,
 `ping`/`pong`, the documented refusal codes, and the close codes a test injects. The
-same listener serves the state stack's `/kv/*` routes over an in-memory store, and
-its `/time` clock, so `yingyeothon_kvstore_client` and the example's key-value screen
-run offline too. It is also the CDN for asset bundles under `/assets/{id}/`,
-encrypted when given a key (the `yyt-enc v1` encryptor in `asset_encryption.dart`),
-for `yingyeothon_asset_client` and the example's asset screen.
+same listener serves the state stack's `/kv/*` routes over an in-memory store, its
+`/time` clock, and its `/lb/*` boards (one write to every bucket judged by rule and
+order, ranks with ties, the period keys in `Asia/Seoul`, `board_full`, the server's
+deletes), so `yingyeothon_kvstore_client`, `yingyeothon_leaderboard_client` and the
+example's key-value and leaderboard screens run offline too. It is also the CDN for
+asset bundles under `/assets/{id}/`, encrypted when given a key (the `yyt-enc v1`
+encryptor in `asset_encryption.dart`), for `yingyeothon_asset_client` and the
+example's asset screen.
 
 It also reproduces the failures a client must survive, each on request: the
 handshake statuses (`404` for a channel outside `channels`, `403` for a game or member
@@ -45,6 +48,8 @@ flowchart LR
   fake -- "GET /map.json" --> sdk
   test -- "options.kvCollections; kv.valueText()" --> fake
   kv["KvStoreClient"] <-- "/kv/{col}/… Authorization: Bearer" --> fake
+  test -- "options.leaderboards; lb.scoreOf()" --> fake
+  lb["LeaderboardClient"] <-- "/lb/{board}/… Authorization: Bearer" --> fake
   test -- "options.assetBundles" --> fake
   assets["AssetBundleClient"] <-- "/assets/{id}/… Range, If-Range" --> fake
 ```
@@ -123,17 +128,20 @@ ignores `Cache-Control`, and cannot replace a file while it runs.
 
 ## Public API
 
-- `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `assetsUrl`, `port`,
+- `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `lb`, `assetsUrl`, `port`,
   `lobbyUsers`,
   `gameMembers`, `received`, `closeUser`, `sendRaw`, `sendBinary`,
   `refuseHandshakes`, `stallGame`, `holdOutbound`, `releaseOutbound`, `shutdown`).
 - `FakeGatewayOptions` (`acceptedTokens`, `tick`, `capabilities`, `partySizeMax`,
   `defaultZone`, `mapDocument`, `onGameFrame`, `maxPeers`, `kvCollections`,
-  `assetBundles`, `channels`, `games`, `clock`, `maxMoveDelta`), `GameFrameHandler`,
+  `leaderboards`, `assetBundles`, `channels`, `games`, `clock`, `maxMoveDelta`), `GameFrameHandler`,
   `GameSession`.
 - `FakeKvCollection` (`name`, `id`, `readScope`, `writeScope`, `encrypted`,
   `maxEntries`, `maxEntriesPerOwner`, `entries`, `ownerEntries`), `FakeKvStore`
   (`valueText`, `handles`, `handle`).
+- `FakeLeaderboard` (`name`, `id`, `submit`, `rule`, `order`, `periods`, `maxEntries`,
+  `scores`), `FakeLeaderboardStore` (`scoreOf`, `periodKey`, `periodEndsAt`,
+  `periodNames`, `handles`, `handle`).
 - `FakeAssetBundle` (`id`, `objects`; built from `files` and an optional `key`).
 - `encryptAsset`, `assetKeyText` — also alone in `asset_encryption.dart`, which
   imports no `dart:io`, for a test that runs in a browser.
@@ -153,6 +161,12 @@ ignores `Cache-Control`, and cannot replace a file while it runs.
   rather than 32-hex user ids — so a mail writer's id is not held to the owner
   grammar and a player's stamp is its token text — and stores values in the clear
   whatever `encrypted` says.
+- The boards follow `services/state/src/leaderboard.ts` (the board before the
+  credential rule, `submit`, every bucket judged by `rule` × `order`, `board_full`
+  for the whole write, `1 + count(better)` ranks with ties by owner in the scan's
+  direction, the KST period keys, `limit` clamped and `offset` refused past 1,000,
+  the server-only deletes with a 500-row clear batch) but, like the kv store, admit
+  any plain segment as an owner, keep no past buckets and never sweep.
 - `GET /kv/{col}` refuses a player only when both scopes are `team` or `server`, as
   the service's route comment says (its docs still name `team`/`team` only); the
   deployed route code also refuses a player on any collection without a `project`

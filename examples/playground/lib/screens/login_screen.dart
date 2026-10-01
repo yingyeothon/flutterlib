@@ -8,6 +8,7 @@ import '../session.dart';
 import '../widgets/log_panel.dart';
 import 'asset_screen.dart';
 import 'kv_screen.dart';
+import 'leaderboard_screen.dart';
 import 'lobby_screen.dart';
 
 /// Config, sign-in, and the offline demo.
@@ -48,11 +49,17 @@ class _LoginScreenState extends State<LoginScreen> {
     _authChannel = TextEditingController(text: c.authChannelId);
     _kvBase = TextEditingController(text: c.kvBaseUrl);
     _assetBase = TextEditingController(text: c.assetBaseUrl);
-    if (offlineAutostart || offlineAutostartKv) {
+    if (offlineAutostart || offlineAutostartKv || offlineAutostartLb) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _offline();
         if (!mounted || !session.signedIn) return;
-        await (offlineAutostartKv ? _openKv() : _enterLobby());
+        if (offlineAutostartKv) {
+          await _openKv();
+        } else if (offlineAutostartLb) {
+          await _openLeaderboard();
+        } else {
+          await _enterLobby();
+        }
       });
     }
   }
@@ -189,6 +196,17 @@ class _LoginScreenState extends State<LoginScreen> {
     await session.fetchServerTime();
   });
 
+  Future<void> _openLeaderboard() async {
+    await _run(() async {
+      session.updateConfig(_readConfig());
+      if (!session.config.canUseKv) {
+        throw StateError('key-value base URL is required');
+      }
+    });
+    if (_error != null || !mounted) return;
+    await Navigator.of(context).pushNamed(LeaderboardScreen.route);
+  }
+
   Future<void> _openAssets() async {
     await _run(() async {
       session.updateConfig(_readConfig());
@@ -314,6 +332,11 @@ class _LoginScreenState extends State<LoginScreen> {
             key: const Key('open-kv'),
             onPressed: _busy || !session.signedIn ? null : _openKv,
             child: const Text('Key-value store'),
+          ),
+          FilledButton.tonal(
+            key: const Key('open-leaderboard'),
+            onPressed: _busy || !session.signedIn ? null : _openLeaderboard,
+            child: const Text('Leaderboard'),
           ),
           FilledButton.tonal(
             key: const Key('open-assets'),

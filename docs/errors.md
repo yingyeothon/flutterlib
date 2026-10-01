@@ -50,6 +50,7 @@ the gateway's limits yourself.
 | `map()` | `StateError` / `MapFetchException(status, reason)` | before `hello` or after `close()` / the fetch failed (`status`, `timeout`, `tooLarge`, `network`, `badUrl`) |
 | `AuthClient` | `AuthFailure(kind, status)` | see [Authentication](authentication.md) |
 | `KvStoreClient` (and the static `fetchServerTime`) | `KvStoreException(status, code)` / `ArgumentError` | the store or the network refused / a `baseUrl` that is not a bare absolute `http(s)` URL, an empty token, or a key, name, owner, value size, `ttl`, `limit`, `ifMatch` or `incr` `min` over `max` the server would refuse; see [Key-value store](kvstore.md) |
+| `LeaderboardClient` | `LeaderboardException(status, code)` / `ArgumentError` | the state stack or the network refused / a `baseUrl`, token, board ref, owner, period name, `limit`, `offset`, score or `meta` the server would refuse; see [Leaderboards](leaderboard.md) |
 | `WebSocketChannelFactory.connect` | `ArgumentError` | a subprotocol with an illegal character (reported by index), a URL that is not `ws`/`wss` |
 
 None of these carries a token, a body or a URL in its message.

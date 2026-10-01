@@ -122,9 +122,12 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
 
 ## Scope decisions already made
 
-- Eight packages (`kvstore_client` was added as the seventh and `asset_client` as the
+- Nine packages (`kvstore_client` was added as the seventh and `asset_client` as the
   eighth by owner decision: the service's `docs/asset-encryption.md` specifies an
-  `asset-client` for tslib, csharplib and flutterlib), no more without a reason that survives "can this run on a phone?".
+  `asset-client` for tslib, csharplib and flutterlib; `leaderboard_client` as the
+  ninth by owner decision on 2026-10-01, which pre-approved a `social_client` for
+  `/social/*` as the tenth), no more without a reason that survives "can this run
+  on a phone?".
 - The gateway wire protocol is owned by the `service` repository. When it changes,
   this SDK follows it — never the other way round.
 - The example is one app (`playground`) that exercises every package; a second
