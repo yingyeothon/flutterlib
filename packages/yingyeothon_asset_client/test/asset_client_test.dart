@@ -10,7 +10,7 @@ import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 import 'support/encrypt.dart';
 import 'support/fake_cdn.dart';
 
-const String base = 'https://dev-d.yyt.life/assets/bnd_test/';
+const String base = 'https://dev-d.yyt.life/assets/ab_test/';
 final key = testKey(3);
 final otherKey = testKey(99);
 

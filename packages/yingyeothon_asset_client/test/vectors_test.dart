@@ -16,7 +16,7 @@ Uint8List _hex(String s) => Uint8List.fromList([
     int.parse(s.substring(i, i + 2), radix: 16),
 ]);
 
-const String _base = 'https://dev-d.yyt.life/assets/bnd_vectors/';
+const String _base = 'https://dev-d.yyt.life/assets/ab_vectors/';
 
 void main() {
   final vectors = jsonDecode(

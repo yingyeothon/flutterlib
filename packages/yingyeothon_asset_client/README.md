@@ -41,7 +41,8 @@ dependencies:
 import 'package:yingyeothon_asset_client/yingyeothon_asset_client.dart';
 
 final bundle = AssetBundleClient(AssetBundleClientOptions(
-  baseUrl: 'https://d.yyt.life/assets/bnd_123/', // a live bundle; add 'v3/' for a version
+  // a live bundle; add 'v3/' for a version
+  baseUrl: 'https://d.yyt.life/assets/ab_0123456789abcdef/',
   key: bundleKey, // 'yak1.…' from `yyt asset key show <bundle>`; omit for a plain bundle
 ));
 
@@ -82,10 +83,10 @@ versioned one. The client derives it from `baseUrl` and `path`, and a keyed clie
 refuses a `baseUrl` of neither shape with an `ArgumentError` at construction.
 
 **`baseUrl` is the bundle or the version, never a folder inside it.**
-`…/assets/bnd_123/music/` has the shape of version `music` of a versioned bundle, so
-every read of a live bundle through it fails as `asset_corrupt`; put the folder in
-`path` instead. The same bytes served under another path, version or bundle fail the
-same way, exactly like a wrong key.
+`…/assets/ab_0123456789abcdef/music/` has the shape of version `music` of a versioned
+bundle, so every read of a live bundle through it fails as `asset_corrupt`; put the
+folder in `path` instead. The same bytes served under another path, version or bundle
+fail the same way, exactly like a wrong key.
 
 A `path` is segments separated by `/`, with no leading slash, no empty, `.` or `..`
 segment, no backslash, no control character and no lone UTF-16 surrogate. Each

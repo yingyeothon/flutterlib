@@ -9,7 +9,7 @@ import 'package:yingyeothon_asset_client/yingyeothon_asset_client_io.dart';
 import 'support/encrypt.dart';
 import 'support/fake_cdn.dart';
 
-const String base = 'https://dev-d.yyt.life/assets/bnd_io/';
+const String base = 'https://dev-d.yyt.life/assets/ab_io/';
 final key = testKey(5);
 
 /// Passes through to [inner], but the next body fails after [cut] bytes.

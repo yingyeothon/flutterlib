@@ -53,7 +53,8 @@ const bundleKey = bool.hasEnvironment('BUNDLE_KEY')
     : null; // a plain bundle
 
 final bundle = AssetBundleClient(AssetBundleClientOptions(
-  baseUrl: 'https://d.yyt.life/assets/bnd_123/', // dev: https://dev-d.yyt.life
+  // dev: https://dev-d.yyt.life/assets/ab_…/
+  baseUrl: 'https://d.yyt.life/assets/ab_0123456789abcdef/',
   key: bundleKey,
 ));
 
