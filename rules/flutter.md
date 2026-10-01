@@ -30,12 +30,21 @@ The libraries are engine-free; this file is about the app around them.
   written for that: `maxHandshakeFailures` is what ends a dead token, not a status
   code.
 - iOS suspends sockets when the app pauses; Android may. Expect a close on resume and
-  let the reconnect policy run for a short pause. If you wire
-  `WidgetsBindingObserver`, do it in the app: `close()` on `paused`, a new client on
-  `resumed` (`docs/flutter.md` has the wiring; a closed client is spent). Leaving a
-  long pause to the policy fails: handshake failures keep
-  counting in the background, and `maxHandshakeFailures` (5) stops the session about
-  15 s after the OS ends the socket (`manual-verification.md`, "Background resume").
+  let the reconnect policy run for a short pause. Wire `WidgetsBindingObserver` in
+  the app, never in a package: `close()` on `paused`, a new client on `resumed`
+  (`docs/flutter.md` has the wiring; a closed client is spent). The playground's
+  lobby screen does it through its `Session`: it closes only a live client
+  (`state` not `idle` or `closed`) and remembers that the pause did it, so a
+  client the policy ended stays ended and a resume without a pause-close opens
+  nothing; only `paused` closes, never `inactive` or `hidden`. A widget test drives
+  the sequence `ServicesBinding` generates from a platform message (`inactive`,
+  `hidden`, `paused`; `hidden`, `inactive`, `resumed`); calling
+  `handleAppLifecycleStateChanged` directly skips that generation, and the only
+  order check is the debug assert in `AppLifecycleListener`, live when one exists
+  (a `TextField` on the screen is enough). Leaving a long pause to the policy
+  fails: handshake failures keep counting in the background, and
+  `maxHandshakeFailures` (5) stops the session about 15 s after the OS ends the
+  socket (`manual-verification.md`, "Background resume").
 - `dart:io`'s `WebSocket.done` on a **server** socket does not complete after a
   client-initiated close; the stream's end does. The fake gateway and the transport
   tests read the stream for that reason.

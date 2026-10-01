@@ -322,12 +322,102 @@ void main() {
     expect(find.textContaining('Lobby · connected'), findsOneWidget);
   });
 
-  testWidgets('a forced 4000 stops for good', (tester) async {
+  testWidgets('a pause closes the lobby; a resume reconnects where you were', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await gw.shutdown();
+      gw = await FakeGateway.start(
+        options: const FakeGatewayOptions(tick: 30, maxMoveDelta: 3),
+      );
+    });
+    session.config = session.config.copyWith(gatewayUrl: gw.wsUrl.toString());
+    await openLobby(tester);
+    for (var i = 0; i < 4; i++) {
+      await tester.tap(find.byKey(const Key('move-right')));
+      await tester.pump();
+    }
+    await pumpUntil(tester, () => gw.received('you').last['x'] == 9.0);
+    final first = session.lobby!;
+    final sent = gw.received('you').where((f) => f['type'] == 'pos').length;
+
+    // The OS pauses the app, through inactive and hidden, where nothing
+    // happens; at paused the app closes the socket itself, so no handshake
+    // failure counts in the background.
+    final binding = tester.binding;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+    expect(session.lobby, same(first));
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await pumpUntil(tester, () => session.lobby == null);
+    await pumpUntil(tester, () => first.state == GatewayClientState.closed);
+    expect(
+      session.position?.x,
+      9.0,
+      reason: 'the position outlives the client',
+    );
+    expect(session.log.map((l) => l.text), contains('paused: lobby closed'));
+
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(session.lobby, isNull, reason: 'only resumed opens a new one');
+
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await pumpUntil(tester, () => session.lobby?.hello != null);
+    expect(session.lobby, isNot(same(first)));
+    await pumpUntil(tester, () => !session.placing);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    // The new client announced (9, 5), the kept position, not the spawn.
+    final after = gw.received('you').where((f) => f['type'] == 'pos').toList();
+    expect(after.length, sent + 1);
+    expect(after.last['x'], 9.0);
+    expect(
+      session.log.map((l) => l.text),
+      isNot(contains('refused: move_too_far')),
+    );
+    expect(find.textContaining('Lobby · connected'), findsOneWidget);
+
+    // A short blur (inactive, then resumed) opens nothing: the socket stayed.
+    final second = session.lobby;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(session.lobby, same(second));
+  });
+
+  testWidgets('a forced 4000 stops for good, through a pause too', (
+    tester,
+  ) async {
     await openLobby(tester);
     await tester.runAsync(() => gw.closeUser('you', 4000));
     await pumpUntil(
       tester,
       () => (session.lastBanner ?? '').startsWith('stopped'),
+    );
+    expect(find.textContaining('stopped (4000)'), findsOneWidget);
+    // The gateway said not to come back; a pause and a resume do not.
+    final stopped = session.lobby;
+    expect(stopped?.state, GatewayClientState.closed);
+    final binding = tester.binding;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    expect(session.lobby, same(stopped));
+    expect(
+      session.log.map((l) => l.text),
+      isNot(contains('paused: lobby closed')),
     );
     expect(find.textContaining('stopped (4000)'), findsOneWidget);
   });

@@ -107,6 +107,18 @@ refused as `move_too_far`. The offline demo enforces the gateway's default
 `maxMoveDelta` of 3, so the rule holds there too; its seeded peers walk one step at
 a time for the same reason, and *Seed peers* seeds them once per demo.
 
+## Pause and resume
+
+The lobby screen owns the app lifecycle, as [Flutter](../../docs/flutter.md)
+describes: on `paused` it closes a live lobby client (the log panel says `paused:
+lobby closed`, the app bar `Lobby · idle`), and on the next `resumed` it opens a new
+one (`resumed: new lobby client`, then `connecting` and `connected`), which announces
+the kept position, so a pause of any length comes back where you were rather than
+`stopped` after the policy's five failed handshakes. A client the policy already
+stopped (`4000`, a dead token) is left stopped. The new client starts with an empty
+chat and event list and fetches the map again; a dungeon `q` session is not managed
+and is left to its own policy.
+
 ## Debug hooks (`kDebugMode` only)
 
 | Where | Hook | Effect |

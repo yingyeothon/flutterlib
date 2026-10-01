@@ -23,34 +23,82 @@ class LobbyScreen extends StatefulWidget {
   State<LobbyScreen> createState() => _LobbyScreenState();
 }
 
-class _LobbyScreenState extends State<LobbyScreen> {
+class _LobbyScreenState extends State<LobbyScreen> with WidgetsBindingObserver {
   String? _connectError;
+
+  /// Whether a pause closed a live lobby, so the next resume opens a new
+  /// one. A lobby the policy already ended (`closed`) is left ended: the
+  /// gateway said not to come back, and a pause is not a reason to.
+  bool _closedForPause = false;
 
   Session get session => widget.session;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // After the first frame, so the session's notifications do not land
-    // while this screen's route is still building. Not awaited on purpose:
-    // the screen renders the connecting state, and the error is shown in
-    // place rather than thrown at the framework.
+    // while this screen's route is still building.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      session
-          .connectLobby()
-          .then((hello) {
-            // The session announced the position on `connected`.
-            if (mounted && offlineAutostart) seedPeers(session);
-          })
-          .catchError((Object e) {
-            if (mounted) setState(() => _connectError = e.toString());
-          });
+      _connect(seed: offlineAutostart);
     });
+  }
+
+  /// Not awaited on purpose: the screen renders the connecting state, and
+  /// the error is shown in place rather than thrown at the framework.
+  void _connect({bool seed = false}) {
+    setState(() => _connectError = null);
+    session
+        .connectLobby()
+        .then((hello) {
+          // The session announced the position on `connected`.
+          if (mounted && seed) seedPeers(session);
+        })
+        .catchError((Object e) {
+          // A pause that lands mid-handshake ends the connect with a stopped
+          // exception; the resume that follows opens a new client, so that
+          // one is not an error to show.
+          if (mounted && !_closedForPause) {
+            setState(() => _connectError = e.toString());
+          }
+        });
+  }
+
+  /// The app, not a package, owns the lifecycle (docs/flutter.md, "Background
+  /// and resume"): a long pause would otherwise spend `maxHandshakeFailures`
+  /// in the background and come back `stopped`. The session closes the lobby
+  /// client on `paused` and opens a new one on `resumed`, which announces
+  /// the position the session kept. The `q` client is not managed here.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+        final lobby = session.lobby;
+        // Only a live client: one the policy ended stays ended.
+        if (lobby == null ||
+            lobby.state == GatewayClientState.idle ||
+            lobby.state == GatewayClientState.closed) {
+          return;
+        }
+        _closedForPause = true;
+        session.note('paused: lobby closed');
+        session.closeLobby();
+      case AppLifecycleState.resumed:
+        if (!_closedForPause || !mounted) return;
+        _closedForPause = false;
+        session.note('resumed: new lobby client');
+        _connect();
+      case AppLifecycleState.detached:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        return;
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // The session outlives the screen; closing here ends the socket.
     session.closeLobby();
     super.dispose();

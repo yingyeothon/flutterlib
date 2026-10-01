@@ -38,23 +38,38 @@ screen shows both cases against the offline demo.
 
 ## Background and resume
 
-iOS suspends sockets when the app pauses; Android may. Expect a `disconnected` on
-resume and let the policy run (`4002` idle → reconnect). Either way the gateway may
-have kept your position: keep the one you last sent outside the client and announce
-it on `connected` ([A retained position](lobby.md#a-retained-position)). To end
-cleanly instead:
+iOS suspends sockets when the app pauses; Android may. The reconnect policy covers a
+drop while the app is in the foreground (`4002` idle → reconnect), but it keeps
+counting handshake failures while the app is paused, and the app cannot know how
+long a pause will last — so close on every `paused` and open a new client on the
+`resumed` that follows. Keep the position you last sent outside the client and
+announce it on `connected` ([A retained position](lobby.md#a-retained-position)):
 
 ```dart
 class _LobbyState extends State<LobbyPage> with WidgetsBindingObserver {
+  bool _closedForPause = false;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) lobby.close();
-    if (state == AppLifecycleState.resumed && lobby.state == GatewayClientState.closed) {
-      _createAndConnect(); // a new client; the old one is spent
+    if (state == AppLifecycleState.paused && lobby.state != GatewayClientState.closed) {
+      _closedForPause = true;
+      lobby.close(); // a closed client is spent
+    }
+    if (state == AppLifecycleState.resumed && _closedForPause) {
+      _closedForPause = false;
+      _createAndConnect(); // a new client, announcing the kept position
     }
   }
 }
 ```
+
+The flag, not the state, decides the resume: a client the policy already ended
+(`closed` after a `4000`, a dead token) is left ended, since the gateway said not
+to come back. Only `paused` closes; `inactive` and `hidden` pass on the way and
+mean nothing on their own. A new client starts with no chat, no events and a fresh
+map fetch; a `q` client is a game session and is not managed this way. The
+playground's lobby screen is this pattern through its `Session`
+(`examples/playground/lib/screens/lobby_screen.dart`).
 
 ## Widgets, streams and `dispose()`
 

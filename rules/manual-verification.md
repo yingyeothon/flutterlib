@@ -342,14 +342,20 @@ in `<scratch>/jwt.txt` are all still there); the Claude in Chrome extension
    the lobby, move; Chrome shows `1 peer(s) in view` and the peer moving, and the
    emulator shows Chrome's player.
 5. **Background resume, two runs, record both.** The emulator ends the app's
-   connections within seconds of HOME (a download body fails, the lobby socket
-   closes `1006`) and every handshake fails while it is in the background, so, each
-   followed by a screencap: `adb shell 'input keyevent KEYCODE_HOME; sleep 8; am
-   start -n life.yyt.yyt_playground/.MainActivity'` — the banner goes reconnecting →
-   connected within the first attempts and you are where you were; the same with
-   `sleep 30` — `stopped (1006): handshake failed 5 times in a row`
-   (`maxHandshakeFailures`, 15.5 s ± 20 % of backoff; `flutter.md` says what an app
-   does about it). A real phone may keep the socket longer.
+   connections within seconds of HOME (a download body fails) and every handshake
+   fails while it is in the background. The lobby screen closes its client on
+   `paused` and opens a new one on `resumed` (`flutter.md`), so the app closes the
+   lobby socket before the OS can. Each run, followed by a screencap: `adb logcat
+   -c`, then `adb shell 'input keyevent KEYCODE_HOME; sleep 8; am start -n
+   life.yyt.yyt_playground/.MainActivity'`, then `adb logcat -d -s flutter` (the
+   same lines the log panel shows; the banner is what the screencap shows). Walked
+   2026-10-01 on `lamp_api36` with this wiring, both runs: `paused: lobby closed`,
+   then `resumed: new lobby client` and `lobby connected` within a second of the
+   return, the player where it was, no banner, no `refused`; the same with `sleep
+   30`. Before the wiring the 30 s run came back `stopped (1006): handshake failed
+   5 times in a row` (`maxHandshakeFailures`, 15.5 s ± 20 % of backoff). Record
+   what you see, in the `Verified:` line below, verbatim; a divergence is a
+   finding, not a mistake in the walk. A real phone may keep the socket longer.
 6. **The resumed download over 2 MiB.** Ask a platform admin (the user) for `yyt
    limit set asset.fileBytes 64MiB --bundle <throwaway>-assets --expires 1d --note
    "resume test"` and, since the bundle cap is 20 MiB, `asset.bundleBytes 128MiB`
@@ -383,7 +389,7 @@ in `<scratch>/jwt.txt` are all still there); the Claude in Chrome extension
 
 The commit lines:
 
-- `Verified: dev gateway on chrome and <avd>, two clients on one lobby; resume 8 s reconnected, 30 s stopped 1006`
+- `Verified: dev gateway on chrome and <avd>, two clients on one lobby; resume 8 s <what you saw>, 30 s <what you saw>` (2026-10-01: both `reconnected, position kept`)
 - `Not run: verify on web (no CORS on /c/{ch}/verify)` — always, beside the first line
 - `Verified: dev assets in chrome; resumed download on <avd> (40 MiB, killed and resumed)`
 - `Not run: dev gateway on chrome — no extension` (also when the extension has no permission for the site)
