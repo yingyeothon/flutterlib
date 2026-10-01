@@ -15,6 +15,7 @@ workspace:
   - packages/yingyeothon_kvstore_client
   - packages/yingyeothon_asset_client
   - packages/yingyeothon_leaderboard_client
+  - packages/yingyeothon_social_client
   - tool
 dev_dependencies:
   lints: ^6.1.0

@@ -9,8 +9,11 @@ chat and events by scope, parties with the gateway's `omitempty` marshalling,
 same listener serves the state stack's `/kv/*` routes over an in-memory store, its
 `/time` clock, and its `/lb/*` boards (one write to every bucket judged by rule and
 order, ranks with ties, the period keys in `Asia/Seoul`, `board_full`, the server's
-deletes), so `yingyeothon_kvstore_client`, `yingyeothon_leaderboard_client` and the
-example's key-value and leaderboard screens run offline too. It is also the CDN for
+deletes) and its `/social/*` graph (cards, the four-state rows and every transition
+the planners allow, the caps, the shared `404`, the server key's deletes), so
+`yingyeothon_kvstore_client`, `yingyeothon_leaderboard_client`,
+`yingyeothon_social_client` and the example's key-value, leaderboard and friends
+screens run offline too. It is also the CDN for
 asset bundles under `/assets/{id}/`, encrypted when given a key (the `yyt-enc v1`
 encryptor in `asset_encryption.dart`), for `yingyeothon_asset_client` and the
 example's asset screen.
@@ -50,6 +53,7 @@ flowchart LR
   kv["KvStoreClient"] <-- "/kv/{col}/… Authorization: Bearer" --> fake
   test -- "options.leaderboards; lb.scoreOf()" --> fake
   lb["LeaderboardClient"] <-- "/lb/{board}/… Authorization: Bearer" --> fake
+  social["SocialClient"] <-- "/social/… Authorization: Bearer" --> fake
   test -- "options.assetBundles" --> fake
   assets["AssetBundleClient"] <-- "/assets/{id}/… Range, If-Range" --> fake
 ```
@@ -128,13 +132,13 @@ ignores `Cache-Control`, and cannot replace a file while it runs.
 
 ## Public API
 
-- `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `lb`, `assetsUrl`, `port`,
+- `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `lb`, `social`, `assetsUrl`, `port`,
   `lobbyUsers`,
   `gameMembers`, `received`, `closeUser`, `sendRaw`, `sendBinary`,
   `refuseHandshakes`, `stallGame`, `holdOutbound`, `releaseOutbound`, `shutdown`).
 - `FakeGatewayOptions` (`acceptedTokens`, `tick`, `capabilities`, `partySizeMax`,
   `defaultZone`, `mapDocument`, `onGameFrame`, `maxPeers`, `kvCollections`,
-  `leaderboards`, `assetBundles`, `channels`, `games`, `clock`, `maxMoveDelta`), `GameFrameHandler`,
+  `leaderboards`, `socialProfiles`, `assetBundles`, `channels`, `games`, `clock`, `maxMoveDelta`), `GameFrameHandler`,
   `GameSession`.
 - `FakeKvCollection` (`name`, `id`, `readScope`, `writeScope`, `encrypted`,
   `maxEntries`, `maxEntriesPerOwner`, `entries`, `ownerEntries`), `FakeKvStore`
@@ -142,6 +146,8 @@ ignores `Cache-Control`, and cannot replace a file while it runs.
 - `FakeLeaderboard` (`name`, `id`, `submit`, `rule`, `order`, `periods`, `maxEntries`,
   `scores`), `FakeLeaderboardStore` (`scoreOf`, `periodKey`, `periodEndsAt`,
   `periodNames`, `handles`, `handle`).
+- `FakeSocialProfile` (`owner`, `displayName`, `avatar`), `FakeSocialStore`
+  (`relation`, `displayNameOf`, the caps, `handles`, `handle`).
 - `FakeAssetBundle` (`id`, `objects`; built from `files` and an optional `key`).
 - `encryptAsset`, `assetKeyText` — also alone in `asset_encryption.dart`, which
   imports no `dart:io`, for a test that runs in a browser.
@@ -167,6 +173,17 @@ ignores `Cache-Control`, and cannot replace a file while it runs.
   direction, the KST period keys, `limit` clamped and `offset` refused past 1,000,
   the server-only deletes with a 500-row clear batch) but, like the kv store, admit
   any plain segment as an owner, keep no past buckets and never sweep.
+- The graph follows `services/state/src/social.ts` and the planners in
+  `packages/console-db/src/social.ts` (a card at both ends, the shared `404`, a
+  decline kept as a cooldown the sender sees as pending, a block that drops the
+  peer's row but never their block, an unblock that restores a cooldown, mutual
+  requests settling at once with a `200`, the caps, a card delete that spares
+  others' blocks, the server key's reads, card writes and relation deletes) but
+  admits any plain segment as a player id or a profile owner alike (the service
+  keeps the two grammars apart), authenticates before it routes (the service
+  answers a bad path or method before the credential), moves a row's `since` on
+  every write where the service keeps `created_at`, never expires a request and
+  never sweeps.
 - `GET /kv/{col}` refuses a player only when both scopes are `team` or `server`, as
   the service's route comment says (its docs still name `team`/`team` only); the
   deployed route code also refuses a player on any collection without a `project`

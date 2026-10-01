@@ -10,6 +10,7 @@ import 'asset_screen.dart';
 import 'kv_screen.dart';
 import 'leaderboard_screen.dart';
 import 'lobby_screen.dart';
+import 'social_screen.dart';
 
 /// Config, sign-in, and the offline demo.
 class LoginScreen extends StatefulWidget {
@@ -49,7 +50,10 @@ class _LoginScreenState extends State<LoginScreen> {
     _authChannel = TextEditingController(text: c.authChannelId);
     _kvBase = TextEditingController(text: c.kvBaseUrl);
     _assetBase = TextEditingController(text: c.assetBaseUrl);
-    if (offlineAutostart || offlineAutostartKv || offlineAutostartLb) {
+    if (offlineAutostart ||
+        offlineAutostartKv ||
+        offlineAutostartLb ||
+        offlineAutostartSocial) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _offline();
         if (!mounted || !session.signedIn) return;
@@ -57,6 +61,8 @@ class _LoginScreenState extends State<LoginScreen> {
           await _openKv();
         } else if (offlineAutostartLb) {
           await _openLeaderboard();
+        } else if (offlineAutostartSocial) {
+          await _openSocial();
         } else {
           await _enterLobby();
         }
@@ -207,6 +213,17 @@ class _LoginScreenState extends State<LoginScreen> {
     await Navigator.of(context).pushNamed(LeaderboardScreen.route);
   }
 
+  Future<void> _openSocial() async {
+    await _run(() async {
+      session.updateConfig(_readConfig());
+      if (!session.config.canUseKv) {
+        throw StateError('key-value base URL is required');
+      }
+    });
+    if (_error != null || !mounted) return;
+    await Navigator.of(context).pushNamed(SocialScreen.route);
+  }
+
   Future<void> _openAssets() async {
     await _run(() async {
       session.updateConfig(_readConfig());
@@ -337,6 +354,11 @@ class _LoginScreenState extends State<LoginScreen> {
             key: const Key('open-leaderboard'),
             onPressed: _busy || !session.signedIn ? null : _openLeaderboard,
             child: const Text('Leaderboard'),
+          ),
+          FilledButton.tonal(
+            key: const Key('open-social'),
+            onPressed: _busy || !session.signedIn ? null : _openSocial,
+            child: const Text('Friends'),
           ),
           FilledButton.tonal(
             key: const Key('open-assets'),

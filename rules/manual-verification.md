@@ -44,6 +44,11 @@ process and connects the SDK to it over the real transport. Walk the change:
   *Submit* with the default 70 shows `Stored 70, rank 2 of 4`; a second submit of
   `10` leaves that line as it is, and the log panel shows `lb request` lines with a route kind and
   a status and never a `Bearer`.
+- Login → **Friends**: `No card yet`; type `demoFriendId` (32 `a`s) into the
+  player id field, then *Ask* before a card shows `set your card first (409)`;
+  *Save* shows `Card: Player (heroes/mage)`; *Ask* again shows `0 waiting for me,
+  1 sent`; the log panel shows `social request` lines with a route kind and a
+  status and never a `Bearer` or a name.
 - Login → **Asset bundle** (enabled without sign-in): the first line reads `An
   encrypted bundle: every 64 KiB segment is verified…`, the manifest card shows `{"v":1,"files":["hello.txt","big.bin"]}`, *Read*
   shows `Hello from an encrypted asset bundle.`, *Download* fills the bar and ends
@@ -59,7 +64,7 @@ package:
 
 | Hook | What it does |
 | --- | --- |
-| Offline demo | starts the fake gateway (lobby, `q`, `/kv/*`, the `race` board under `/lb/*` and an encrypted bundle under `/assets/*` with a key made at start), fills the config with its URLs, that key and a plain token |
+| Offline demo | starts the fake gateway (lobby, `q`, `/kv/*`, the `race` board under `/lb/*`, three cards under `/social/*` and an encrypted bundle under `/assets/*` with a key made at start), fills the config with its URLs, that key and a plain token |
 | Seed 3 peers | connects three raw sockets to the fake as `seed-1..3` and moves them every 400 ms |
 | Force close *code* | asks the fake to close your lobby socket with `4000`, `4002`, `4004`, `4005` or `1001` |
 | Abort (4001) / Finish (1000) | closes your `q` socket with that code (dungeon screen) |
@@ -67,6 +72,7 @@ package:
 | `--dart-define=YYT_OFFLINE_AUTOSTART=true` | on launch: offline demo, enter the lobby, seed the peers — no input needed |
 | `--dart-define=YYT_OFFLINE_AUTOSTART_KV=true` | on launch: offline demo, open the key-value screen, save one settings record |
 | `--dart-define=YYT_OFFLINE_AUTOSTART_LB=true` | on launch: offline demo, open the leaderboard screen, submit one score |
+| `--dart-define=YYT_OFFLINE_AUTOSTART_SOCIAL=true` | on launch: offline demo, open the friends screen, set a card, ask the first seeded card's owner |
 
 Without a UI driver (an agent, a headless box), build with the autostart define,
 launch the binary, and read the log panel or stdout; that is how the ritual's "a

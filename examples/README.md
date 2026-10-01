@@ -7,7 +7,7 @@ app builds.
 
 | Example | What it shows |
 | --- | --- |
-| [playground](playground/) | sign-in, lobby (zone map, chat, parties), dungeon `q`, reconnect banners, the key-value store's two cases, a leaderboard, an encrypted asset bundle, and an offline demo against the in-process fake gateway |
+| [playground](playground/) | sign-in, lobby (zone map, chat, parties), dungeon `q`, reconnect banners, the key-value store's two cases, a leaderboard, friends and blocks, an encrypted asset bundle, and an offline demo against the in-process fake gateway |
 
 ```bash
 cd examples/playground

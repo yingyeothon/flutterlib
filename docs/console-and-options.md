@@ -50,7 +50,7 @@ starts a dungeon ([Dungeon](dungeon.md)).
 The static `KvStoreClient.fetchServerTime(baseUrl)` takes the same three, with the
 same defaults, for the one request it makes. `LeaderboardClientOptions` is the same
 five options for the same host (`baseUrl`, `token`, `client`, `timeout`, `logger`);
-its log lines are `lb request`.
+its log lines are `lb request`; `SocialClientOptions` likewise, with `social request`.
 
 ## What the console setting becomes in `hello`
 

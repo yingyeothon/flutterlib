@@ -127,7 +127,8 @@
   `isUserNamespace` read `writeScope` alone while the service's `isKvPerOwner` takes
   either scope, so a mail collection got the wrong path. Every later commit up to
   `a3fa068` was read on 2026-09-30 and changes no kv route (console caps, and the
-  `/lb` and `/social` stacks, which have clients of their own since 2026-10-01). Before kv work, fetch the `service` repository and
+  `/lb` and `/social` stacks, which have clients of their own since 2026-10-01).
+  Before kv work, fetch the `service` repository and
   run, as one line:
 
   ```bash
@@ -164,11 +165,11 @@
   `LbRules` cited to `packages/console-db/src/leaderboard.ts` (the owner grammar
   from `kvstore.ts`, as the service's `checkOwnerId` is kv's), and an exception
   that is a status, a code and a `details.reason` word. A change to one requester
-  is a change to both: before editing either, `diff` the two
-  `lib/src/internal/requester.dart` files (they differ in names, in the kv-only
-  answer headers and `headers:` parameter, and in the 4 MiB versus 1 MiB cap) and
-  make the same change to the exchange, the exception mapping and the log line
-  in the other.
+  is a change to all three (kv, leaderboard, social): before editing one, `diff`
+  the `lib/src/internal/requester.dart` files (they differ in names and route
+  enums, in the kv-only answer headers and `headers:` parameter, and in kv's
+  4 MiB cap against the others' 1 MiB) and make the same change to the exchange,
+  the exception mapping and the log line in the other two.
 - **A client never names a bucket key.** The API takes a period *name*, the
   platform computes the key in `Asia/Seoul` and every answer carries `periodKey`
   and `periodEndsAt` (`null` for alltime, so the field is nullable); the fake
@@ -188,6 +189,47 @@
 
   ```bash
   git -C ~/git/yyt.life/service log --oneline fcb8f49..origin/main -- services/state/src/leaderboard.ts services/state/README.md packages/console-db/src/leaderboard.ts docs/leaderboard.md
+  ```
+
+  Read every commit it lists, port what a client can see into the client and the
+  fake, then replace `fcb8f49` in this bullet (both places) with the newest commit
+  you read. An empty list changes nothing here.
+
+## The social client (`social_client`)
+
+- The third client on the state host, the same shape again (one requester, the
+  `debug` line with method, route *kind*, status and bytes — never a player id, a
+  display name or an avatar; grammars in `SocialRules` cited to
+  `packages/console-db/src/social.ts`, the profile owner grammar from `kvstore.ts`).
+  The requester rule of the leaderboard section applies to all three files.
+- **A relation's other end is always a player (32 hex); a card's owner may be a
+  guild (`kind:id`).** `SocialPaths` checks the two grammars apart, so
+  `server.friendsOf('guild:red')` is a local refusal while `server.putProfile` of
+  it is not. A `me` route from a server key and a server route from a player are
+  the service's `403`; the client does not pre-empt them.
+- **The display name is the player's text.** The client refuses what the server
+  refuses (`\p{Cc}`, `\p{Cf}`, U+2028/2029, a run of five or more `\p{Mn}`)
+  and nothing more; what comes back off the wire is another player's text and
+  must pass the app's own label check before it is shown, with the owner id
+  standing in otherwise — the playground's Friends screen does so with
+  `MapLayout.isLabel`, and its test seeds a name past the write filter to prove
+  it (`security.md`, "Trusting the wire").
+- The fake follows the transition planners in `console-db/src/social.ts`: the
+  shared `404` (no card, blocked you, no such
+  player), a decline kept as a `dropped` row the sender sees as pending, a block
+  that drops the peer's request or friendship but never their block, an unblock
+  that restores a kept cooldown, mutual requests settling at once with both
+  friend caps, a card delete that spares others' blocks. Its identities are token
+  texts, so the 32-hex rule on a token's subject is not enforced there; a test
+  that sends an id through the client uses a 32-hex one. Where it departs
+  (identity before routing, one owner grammar for every path, a row's `since`
+  moving on every write, no expiry) the fake README's _Differences_ says so.
+- Read up to service `fcb8f49` (read 2026-10-01; the commit is of 2026-09-29 and
+  touches no social path, so it is the read watermark). Before social work, fetch the
+  `service` repository and run, as one line:
+
+  ```bash
+  git -C ~/git/yyt.life/service log --oneline fcb8f49..origin/main -- services/state/src/social.ts services/state/README.md packages/console-db/src/social.ts docs/social.md
   ```
 
   Read every commit it lists, port what a client can see into the client and the

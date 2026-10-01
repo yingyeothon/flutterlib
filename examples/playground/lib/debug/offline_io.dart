@@ -34,6 +34,10 @@ const String demoBundleId = 'ab_demo';
 /// The demo's leaderboard: `submit: owner`, `best`, `desc`, alltime and
 /// weekly, seeded with three peers' scores.
 const String demoBoard = 'race';
+
+/// The first seeded card's owner: what the friends screen's autostart asks,
+/// and what to type into its field by hand.
+const String demoFriendId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const String demoText = 'Hello from an encrypted asset bundle.';
 
 Map<String, List<int>> _demoAssetFiles() {
@@ -110,6 +114,23 @@ class OfflineDemo {
             order: 'desc',
             periods: <String>['alltime', 'weekly'],
             scores: <String, int>{'seed-1': 80, 'seed-2': 60, 'seed-3': 60},
+          ),
+        ],
+        // Three players with cards, so there is somebody to befriend. Their
+        // ids are 32 hex, the only shape the client sends as a player id.
+        socialProfiles: const <FakeSocialProfile>[
+          FakeSocialProfile(
+            owner: demoFriendId,
+            displayName: 'Seed One',
+            avatar: 'heroes/knight',
+          ),
+          FakeSocialProfile(
+            owner: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            displayName: 'Seed Two',
+          ),
+          FakeSocialProfile(
+            owner: 'cccccccccccccccccccccccccccccccc',
+            displayName: 'Seed Three',
           ),
         ],
         assetBundles: <FakeAssetBundle>[

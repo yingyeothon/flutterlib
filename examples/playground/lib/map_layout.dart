@@ -99,6 +99,12 @@ class MapLayout {
   static bool _isZone(String z) =>
       utf8.encode(z).length <= maxZoneBytes && _isLabel(z, maxZoneBytes);
 
+  /// Whether [s] may be shown as a label: the check the map applies to a
+  /// zone and a name, for any other text off the wire (a player's display
+  /// name, say). The reference list of rules/security.md, "Trusting the
+  /// wire".
+  static bool isLabel(String s, int maxRunes) => _isLabel(s, maxRunes);
+
   /// Non-empty, at most [maxRunes] characters, and nothing that could
   /// rearrange, hide or split what the UI shows, or make two zones differ
   /// only invisibly: no control or format characters (directional marks and

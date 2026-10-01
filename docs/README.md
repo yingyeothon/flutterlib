@@ -20,6 +20,7 @@ packages. Each page is one task; read the first three in order, then jump.
 | run a dungeon against your own game actor | [Dungeon](dungeon.md) |
 | read announcements, save a player's own record, send mail, read the platform clock | [Key-value store](kvstore.md) |
 | rank players: submit a score, read a ranked page and your own rank | [Leaderboards](leaderboard.md) |
+| give players a card, friend requests and blocks | [Friends and blocks](social.md) |
 | load game files from the CDN — a manifest, a database, music — encrypted or not | [Asset bundles](assets.md) |
 | know what happens on a bad network, a gateway restart, a dead token | [Connection lifecycle](connection-lifecycle.md) |
 | handle every refusal, close code and exception | [Errors](errors.md) |
@@ -39,6 +40,7 @@ flowchart LR
   dungeon["Dungeon"] --> gc
   kv["Key-value store"] --> kc["kvstore_client"]
   lb["Leaderboards"] --> lc["leaderboard_client"]
+  social["Friends and blocks"] --> sc["social_client"]
   assets["Asset bundles"] --> asc["asset_client"]
   life["Connection lifecycle"] --> gc
   flutter["Flutter"] --> fg["fake_gateway"]
@@ -48,6 +50,8 @@ flowchart LR
   kc --> logger
   lc --> codec
   lc --> logger
+  sc --> codec
+  sc --> logger
   asc --> codec
   asc --> logger
 ```
@@ -59,6 +63,7 @@ flowchart LR
   [auth_client](../packages/yingyeothon_auth_client/README.md),
   [kvstore_client](../packages/yingyeothon_kvstore_client/README.md),
   [leaderboard_client](../packages/yingyeothon_leaderboard_client/README.md),
+  [social_client](../packages/yingyeothon_social_client/README.md),
   [asset_client](../packages/yingyeothon_asset_client/README.md),
   [codec](../packages/yingyeothon_codec/README.md),
   [logger](../packages/yingyeothon_logger/README.md),
@@ -69,6 +74,6 @@ flowchart LR
 ## What lives in the `service` repository
 
 The gateway's wire protocol, the auth service's endpoints, the key-value store, the
-leaderboards, the asset CDN with its encryption format, and the console are owned by
+leaderboards, the social graph, the asset CDN with its encryption format, and the console are owned by
 [yingyeothon/service](https://github.com/yingyeothon/service). This guide cites them;
 when the two disagree, `service` is right and this SDK follows.

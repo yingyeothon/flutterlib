@@ -23,3 +23,4 @@ export 'src/fake_gateway.dart'
     show FakeGateway, FakeGatewayOptions, GameFrameHandler, GameSession;
 export 'src/fake_kv.dart' show FakeKvCollection, FakeKvStore;
 export 'src/fake_leaderboard.dart' show FakeLeaderboard, FakeLeaderboardStore;
+export 'src/fake_social.dart' show FakeSocialProfile, FakeSocialStore;

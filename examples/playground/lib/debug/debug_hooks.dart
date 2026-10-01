@@ -34,6 +34,17 @@ bool get offlineAutostartLb =>
     offlineDemoAvailable &&
     const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_LB', defaultValue: false);
 
+/// `--dart-define=YYT_OFFLINE_AUTOSTART_SOCIAL=true` (debug builds only):
+/// start the offline demo and open the friends screen, which then sets a
+/// card and asks the first seeded card's owner, so the case is walked with
+/// no input tooling.
+bool get offlineAutostartSocial =>
+    offlineDemoAvailable &&
+    const bool.fromEnvironment(
+      'YYT_OFFLINE_AUTOSTART_SOCIAL',
+      defaultValue: false,
+    );
+
 /// The close codes the debug drawer offers.
 const List<int> forcedCloseCodes = <int>[4000, 4002, 4004, 4005, 1001];
 

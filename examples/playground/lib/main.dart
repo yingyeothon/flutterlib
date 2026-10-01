@@ -6,11 +6,12 @@ import 'screens/kv_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/lobby_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/social_screen.dart';
 import 'session.dart';
 
 void main() => runApp(PlaygroundApp(session: Session()));
 
-/// The app: one [Session], five screens.
+/// The app: one [Session], six screens.
 class PlaygroundApp extends StatelessWidget {
   const PlaygroundApp({super.key, required this.session});
 
@@ -26,6 +27,7 @@ class PlaygroundApp extends StatelessWidget {
       DungeonScreen.route: (_) => DungeonScreen(session: session),
       KvScreen.route: (_) => KvScreen(session: session),
       LeaderboardScreen.route: (_) => LeaderboardScreen(session: session),
+      SocialScreen.route: (_) => SocialScreen(session: session),
       AssetScreen.route: (_) => AssetScreen(session: session),
     },
   );

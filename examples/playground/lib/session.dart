@@ -9,6 +9,7 @@ import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
 import 'package:yingyeothon_kvstore_client/yingyeothon_kvstore_client.dart';
 import 'package:yingyeothon_leaderboard_client/yingyeothon_leaderboard_client.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
+import 'package:yingyeothon_social_client/yingyeothon_social_client.dart';
 
 import 'config.dart';
 import 'map_layout.dart';
@@ -648,6 +649,108 @@ class Session extends ChangeNotifier {
     if (notify) notifyListeners();
   }
 
+  // ---- social --------------------------------------------------------------
+
+  /// The social client for the current token; a new token is a new client.
+  /// Same host as the key-value store.
+  SocialClient? social;
+
+  /// My card; `null` until read or when I have none.
+  SocialProfile? myCard;
+
+  /// Whether the last read found no card of mine.
+  bool myCardAbsent = false;
+
+  /// My friends, as last read.
+  List<SocialRelation> friends = const <SocialRelation>[];
+
+  /// My requests, as last read; `null` until read.
+  SocialRequests? socialRequests;
+
+  /// Creates (or recreates) the client from the config and the token.
+  SocialClient openSocial() {
+    final jwt = token?.jwt;
+    if (jwt == null) throw StateError('sign in first');
+    if (!config.canUseKv) throw StateError('key-value base URL is required');
+    // tryParse: a FormatException would quote the pasted text.
+    final baseUrl = Uri.tryParse(config.kvBaseUrl);
+    if (baseUrl == null) throw StateError('key-value base URL is not a URL');
+    closeSocial();
+    final client = SocialClient(
+      SocialClientOptions(baseUrl: baseUrl, token: jwt, logger: logger),
+    );
+    social = client;
+    notifyListeners();
+    return client;
+  }
+
+  /// Reads my card, my friends and my requests.
+  Future<void> loadSocial() async {
+    final client = social ?? openSocial();
+    final card = await client.myProfile();
+    myCard = card;
+    myCardAbsent = card == null;
+    friends = await client.friends();
+    socialRequests = await client.requests();
+    // Counts only: names and ids are the players' own.
+    note(
+      'social: ${card == null ? 'no card' : 'a card'}, '
+      '${friends.length} friend(s), '
+      '${socialRequests!.incoming.length} in, '
+      '${socialRequests!.outgoing.length} out',
+    );
+    notifyListeners();
+  }
+
+  /// Sets my card, whole, then reads everything again.
+  Future<void> putMyCard(String displayName, {String? avatar}) async {
+    final client = social ?? openSocial();
+    final result = await client.putMyProfile(displayName, avatar: avatar);
+    note('social: card ${result.created ? 'created' : 'updated'}');
+    await loadSocial();
+  }
+
+  /// Asks [player] to be friends, then reads everything again.
+  Future<void> requestFriend(String player) async {
+    final client = social ?? openSocial();
+    final result = await client.request(player);
+    note(
+      'social: request ${result.created
+          ? 'sent'
+          : result.state == SocialRelationState.friends
+          ? 'settled'
+          : 'repeated'}',
+    );
+    await loadSocial();
+  }
+
+  /// Accepts a request from [player], then reads everything again.
+  Future<void> acceptFriend(String player) async {
+    final client = social ?? openSocial();
+    await client.accept(player);
+    note('social: accepted');
+    await loadSocial();
+  }
+
+  /// Drops a friend, then reads everything again.
+  Future<void> unfriend(String player) async {
+    final client = social ?? openSocial();
+    await client.unfriend(player);
+    note('social: unfriended');
+    await loadSocial();
+  }
+
+  /// [notify] as in [closeKv].
+  void closeSocial({bool notify = true}) {
+    social?.close();
+    social = null;
+    myCard = null;
+    myCardAbsent = false;
+    friends = const <SocialRelation>[];
+    socialRequests = null;
+    if (notify) notifyListeners();
+  }
+
   // ---- assets --------------------------------------------------------------
 
   /// The reader for the configured bundle; the CDN needs no token.
@@ -751,6 +854,8 @@ class Session extends ChangeNotifier {
     kv = null;
     lb?.close();
     lb = null;
+    social?.close();
+    social = null;
     assets?.close();
     assets = null;
     super.dispose();
