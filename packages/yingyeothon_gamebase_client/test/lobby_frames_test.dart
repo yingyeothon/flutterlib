@@ -132,12 +132,108 @@ void main() {
         'protocolError:enter without a userId',
       ]);
       expect(h.client.peers.all(), isEmpty);
+      // `early` once, `ghost` once: its leave and its entry beside your echo
+      // are the same ghost again.
       expect(
         h.log.lines.where((l) => l.contains('peer frame for an unknown peer')),
-        hasLength(4),
+        hasLength(2),
       );
     });
   });
+
+  test(
+    'an unknown peer beside a known one is noted; the batch still applies',
+    () {
+      fakeAsync((async) {
+        final h = LobbyHarness(async)..connect();
+        h.openAndHello();
+        h.socket.serverSend(<String, Object?>{
+          'type': 'snapshot',
+          'zone': 'Z',
+          'peers': <Object?>[peer('other', 1, 1)],
+        });
+        Iterable<String> noted() => h.log.lines.where(
+          (l) => l.contains('peer frame for an unknown peer'),
+        );
+        // Not noted: a batch that moves only known peers (and echoes you).
+        h.socket.serverSend(<String, Object?>{
+          'type': 'pos',
+          'zone': 'Z',
+          'peers': <Object?>[peer('me', 2, 2), peer('other', 2, 1)],
+        });
+        expect(noted(), isEmpty);
+        // Noted, and still applied: the known peer moves, the ghost is dropped.
+        h.socket.serverSend(<String, Object?>{
+          'type': 'pos',
+          'zone': 'Z',
+          'peers': <Object?>[peer('other', 3, 1), peer('ghost', 9, 9)],
+        });
+        expect(h.trace, [
+          'connected:me',
+          'snapshot:Z',
+          'move:other',
+          'move:other',
+        ]);
+        expect(h.client.peers.get('other')?.x, 3.0);
+        expect(h.client.peers.get('ghost'), isNull);
+        expect(noted(), hasLength(1));
+        // The same ghost on the next tick is not noted again; a second one is.
+        h.socket.serverSend(<String, Object?>{
+          'type': 'pos',
+          'zone': 'Z',
+          'peers': <Object?>[peer('ghost', 9, 8), peer('other', 4, 1)],
+        });
+        expect(noted(), hasLength(1));
+        expect(h.client.peers.get('other')?.x, 4.0);
+        h.socket.serverSend(<String, Object?>{
+          'type': 'pos',
+          'zone': 'Z',
+          'peers': <Object?>[peer('ghost', 9, 7), peer('ghost2', 0, 0)],
+        });
+        expect(noted(), hasLength(2));
+        // A snapshot starts over: the ghost is news again.
+        h.socket.serverSend(<String, Object?>{
+          'type': 'snapshot',
+          'zone': 'Z',
+          'peers': <Object?>[peer('other', 4, 1)],
+        });
+        h.socket.serverSend(<String, Object?>{
+          'type': 'pos',
+          'zone': 'Z',
+          'peers': <Object?>[peer('ghost', 9, 6)],
+        });
+        expect(noted(), hasLength(3));
+        // A leave for a known peer is a leave, not a gap.
+        h.socket.serverSend(<String, Object?>{
+          'type': 'leave',
+          'zone': 'Z',
+          'userId': 'other',
+        });
+        expect(h.trace.last, 'leave:other');
+        expect(noted(), hasLength(3));
+        // A ghost that then really enters, leaves and lingers is news again.
+        h.socket.serverSend(<String, Object?>{
+          'type': 'enter',
+          'zone': 'Z',
+          'userId': 'ghost',
+          'x': 1,
+          'y': 1,
+        });
+        h.socket.serverSend(<String, Object?>{
+          'type': 'leave',
+          'zone': 'Z',
+          'userId': 'ghost',
+        });
+        expect(noted(), hasLength(3));
+        h.socket.serverSend(<String, Object?>{
+          'type': 'pos',
+          'zone': 'Z',
+          'peers': <Object?>[peer('ghost', 9, 5)],
+        });
+        expect(noted(), hasLength(4));
+      });
+    },
+  );
 
   test('a snapshot replaces the map and keeps insertion order', () {
     final map = PeerMap(selfUserId: 'me');

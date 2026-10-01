@@ -146,8 +146,9 @@ Rules the map applies so you do not have to:
 - frames for any other zone are ignored, so a late `pos` from the zone you left
   cannot resurrect a peer;
 - your own entry in a `pos` batch is dropped;
-- a `pos` or `leave` for a peer you do not know is ignored (the gateway's view
-  invariant says it cannot happen; if it does, it is a gateway bug worth logging);
+- a `pos` entry or a `leave` for a peer you do not know is ignored, the rest of the
+  batch applies (the gateway's view invariant says it cannot happen; if it does, it
+  is a gateway bug, logged at `debug` once per peer until the next `snapshot`);
 - on `disconnected` the map is emptied; after the next `hello` it stays empty until
   a `snapshot` arrives — unasked for a retained position, otherwise after your
   `pos`.

@@ -43,6 +43,7 @@ final class LobbyClientImpl implements GatewayLobbyClient {
       _socket.frames.listen(_onFrame),
       _socket.disconnected.listen((event) {
         _peers.reset();
+        _notedUnknown.clear();
         _disconnected.emit(event);
       }),
       _socket.reconnecting.listen(_reconnecting.emit),
@@ -303,20 +304,27 @@ final class LobbyClientImpl implements GatewayLobbyClient {
       _protocolErrors.emit(const ProtocolErrorEvent('enter without a userId'));
       return;
     }
+    // Before the map applies the frame: a `pos` batch can move a known peer
+    // and name an unknown one at once, and its known entries still apply.
+    if (_namesUnknownPeer(frame)) {
+      // A pos or leave for a peer not in view breaks the gateway's view
+      // invariant; the unknown entry (or the whole leave) is ignored for
+      // rendering and noted once per peer until the next snapshot, so a
+      // persistent ghost is one line, not one per tick.
+      _logger.debug('peer frame for an unknown peer', <String, Object?>{
+        'channelId': _options.channelId,
+        'type': Normalize.diagnostic(frame.type),
+      });
+    }
+    if (frame is SnapshotFrame) _notedUnknown.clear();
     switch (_peers.apply(frame)) {
       case null:
-        if (_namesUnknownPeer(frame)) {
-          // A pos or leave for a peer not in view breaks the gateway's view
-          // invariant; the frame is ignored for rendering and noted.
-          _logger.debug('peer frame for an unknown peer', <String, Object?>{
-            'channelId': _options.channelId,
-            'type': frame.type,
-          });
-        }
-        return;
+        break;
       case PeerSnapshot():
         _snapshots.emit(frame as SnapshotFrame);
       case PeerEntered(:final peer):
+        // A gap after a real visit is news again.
+        _notedUnknown.remove(peer.userId);
         _peerEntered.emit(peer);
       case PeerLeft(:final userId):
         _peerLeft.emit(userId);
@@ -325,22 +333,40 @@ final class LobbyClientImpl implements GatewayLobbyClient {
     }
   }
 
-  /// Whether a frame the peer map ignored named someone it should have
-  /// known. Not: a batch with only your own entry (the gateway echoes every
-  /// mover, and flushes a restored position to you), or a frame for a zone
-  /// you left.
+  /// The unknown peers already noted; lives as long as the peer map (cleared
+  /// with it on `disconnected` and on every snapshot). Ids only, in memory;
+  /// nothing here reaches a log line.
+  final Set<String> _notedUnknown = <String>{};
+
+  /// Whether a frame names, in the current zone, someone the peer map does
+  /// not hold and this client has not noted yet; those it names are
+  /// recorded. Not: your own entry (the gateway echoes every mover, and
+  /// flushes a restored position to you), or a frame for a zone you left.
   bool _namesUnknownPeer(LobbyServerFrame frame) {
     final zone = _peers.zone;
     final self = _hello?.userId;
     // Before the first snapshot there is no zone to leave, so anything
     // naming someone else is noted, as it always was.
     bool current(String z) => zone == null || z == zone;
-    return switch (frame) {
-      LeaveFrame(zone: final z, :final userId) => current(z) && userId != self,
-      PosBroadcastFrame(zone: final z, :final peers) =>
-        current(z) && peers.any((p) => p.userId != self),
-      _ => false,
-    };
+    bool unknown(String userId) =>
+        userId != self &&
+        _peers.get(userId) == null &&
+        _notedUnknown.add(userId);
+    switch (frame) {
+      case LeaveFrame(zone: final z, :final userId):
+        return current(z) && unknown(userId);
+      case PosBroadcastFrame(zone: final z, :final peers):
+        if (!current(z)) return false;
+        // Every entry is visited: `any` would stop recording at the first
+        // new one.
+        var noted = false;
+        for (final p in peers) {
+          noted = unknown(p.userId) || noted;
+        }
+        return noted;
+      default:
+        return false;
+    }
   }
 }
 

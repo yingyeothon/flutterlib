@@ -70,9 +70,16 @@
   `bad_message`, and the client refuses it locally for the same reason it refuses
   `enter`/`leave`. A gateway `error` on `q` is one with a string `code` **and** a
   string `message`; anything else is the game's own frame.
-- A `pos` or `leave` for a peer not in view breaks the gateway's view invariant: the
-  frame is ignored for rendering and logged at `debug` (type only). An `enter`
-  without a `userId` is a protocol error, not a peer named `""`.
+- A `pos` entry or a `leave` for a peer not in view breaks the gateway's view
+  invariant (`docs/lobby.md` says what the consumer sees). The lobby client checks
+  for one **before** `PeerMap.apply`, never on its `null`: one batch can move a
+  known peer beside a ghost, and its known entries still apply. The check visits
+  every entry (a short-circuit stops recording), and the `debug` line — the type
+  and the channel, never the peer's id — fires once per peer: the noted ids stay
+  in memory, cleared with the map on `disconnected` and on every snapshot, and
+  dropped when the peer really enters. Before the first snapshot anyone but you
+  is a ghost. An `enter` without a `userId` is a protocol error, not a peer named
+  `""`.
 
 ## The key-value client (`kvstore_client`)
 
