@@ -124,6 +124,40 @@ void main() {
     );
   });
 
+  test('expiresAt clamps an exp outside DateTime\'s range', () {
+    // `exp` is wire data. Past DateTime's range (8.64e15 ms either side of
+    // the epoch) the constructor throws with the value in its message, so the
+    // getter clamps instead. Decimal literals: a shift past 31 bits is not
+    // the same number on web.
+    const last = 8640000000000;
+    ChannelToken token(int exp) =>
+        ChannelToken(jwt: 'j', userId: 'u', exp: exp);
+    final edge = DateTime.fromMillisecondsSinceEpoch(last * 1000, isUtc: true);
+    final first = DateTime.fromMillisecondsSinceEpoch(
+      -last * 1000,
+      isUtc: true,
+    );
+    expect(token(last).expiresAt, edge);
+    expect(token(last + 1).expiresAt, edge);
+    expect(token(9007199254740992).expiresAt, edge);
+    expect(token(-last).expiresAt, first);
+    expect(token(-last - 1).expiresAt, first);
+    expect(token(-9007199254740992).expiresAt, first);
+    expect(token(last + 1).isExpired(DateTime.utc(2026)), isFalse);
+    expect(token(last + 1).isExpired(edge), isTrue);
+    expect(token(-last - 1).isExpired(DateTime.utc(2026)), isTrue);
+    // The wire path: a fragment whose exp is 13 digits.
+    final parsed = client.parseRedirect(
+      Uri.parse(
+        'https://game.example/signin?nonce=abc#token=$fixtureJwt&userId=u1&exp=9000000000000',
+      ),
+      expectedNonce: 'abc',
+    );
+    expect(parsed.exp, 9000000000000);
+    expect(parsed.expiresAt, edge);
+    expect(parsed.isExpired(DateTime.utc(2026)), isFalse);
+  });
+
   test('parseRedirect returns the token and refuses a bad nonce', () {
     final ok = client.parseRedirect(
       Uri.parse(

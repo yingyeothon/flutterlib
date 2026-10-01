@@ -105,11 +105,27 @@ final class ChannelToken {
   /// Expiry as Unix seconds. There is no refresh; sign in again.
   final int exp;
 
-  /// Expiry as a [DateTime].
-  DateTime get expiresAt =>
-      DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
+  /// Expiry as a [DateTime], in UTC. [exp] came off the wire (a redirect
+  /// fragment, a `/token` or a `/verify` reply), so a value outside `DateTime`'s range
+  /// (±8.64e12 seconds) is clamped to that bound rather than thrown: far in
+  /// the future reads as the last representable instant, far in the past as
+  /// the first.
+  DateTime get expiresAt {
+    final seconds = exp < -_maxExpSec
+        ? -_maxExpSec
+        : exp > _maxExpSec
+        ? _maxExpSec
+        : exp;
+    return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+  }
 
-  /// Whether [now] is past [expiresAt].
+  /// `DateTime`'s range in seconds: 8.64e15 milliseconds either side of the
+  /// epoch (`DateTime.fromMillisecondsSinceEpoch` throws past it).
+  static const int _maxExpSec = 8640000000000;
+
+  /// Whether [now] is past [expiresAt]. An out-of-range [exp] is clamped
+  /// there, so a far-future one is never expired and a far-past one always
+  /// is; neither throws.
   bool isExpired(DateTime now) => !now.toUtc().isBefore(expiresAt);
 
   /// Deliberately does not include the token.

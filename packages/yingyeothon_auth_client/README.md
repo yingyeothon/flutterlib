@@ -82,7 +82,8 @@ quote the credential back, so the status is the whole report.
   (`com.yingyeothon.auth-client`) is modelled on this package; its README lists where
   it departs.
 - `ChannelToken.expiresAt` is a `DateTime` here, with the seconds in `exp`, and Unix
-  seconds in csharplib, because a Dart caller compares it with `DateTime.now()`.
-  `AuthChannelConfig.expiresAt` is Unix seconds in both, so mind the name.
+  seconds in csharplib, because a Dart caller compares it with `DateTime.now()`. An
+  `exp` outside `DateTime`'s range is clamped to its bound, never thrown: `exp` is
+  wire data. `AuthChannelConfig.expiresAt` is Unix seconds in both, so mind the name.
 - The nonce rides in the redirect's query string; the auth service matches the
   allowlist on origin and path prefix, so a query is admitted.
