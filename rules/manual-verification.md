@@ -323,19 +323,37 @@ in `<scratch>/jwt.txt` are all still there); the Claude in Chrome extension
    take a screenshot (it shows the cursor), and scale every click by the ratio.
    **Asset bundle** first (no sign-in): the manifest card, *Read* shows `hello`,
    *Download* ends at `Downloaded 200000 bytes`, the log has `head` and `segments`
-   lines and no `yak1.`. Then sign in: the auth service sends no CORS headers
-   (`OPTIONS /c/{ch}/verify` is `405`, checked 2026-10-01; the kv routes and the CDN
-   do), so clear the **Auth channel id** field first and *Use this token* takes the
-   unverified path — the app shows `Signed in as (unverified)`, the gateway verifies
-   the JWT itself, and `verify` on web is not run. The token goes through the host
+   lines and no `yak1.`. Then sign in: leave both auth fields as the defines file
+   filled them (the **Auth base URL** and the **Auth channel id** — `canSignIn` needs
+   both), so *Use this token* calls `verify` on the service. The token goes through the host
    clipboard, never through a tool's text argument (that is the transcript): this
    host has no `xclip`, so `<scratch>/clip.py` is `import sys, tkinter as tk; r =
    tk.Tk(); r.withdraw(); r.clipboard_clear();
    r.clipboard_append(open(sys.argv[1]).read().strip()); r.mainloop()`, started
    as `setsid nohup python3 <scratch>/clip.py <scratch>/jwt.txt >/dev/null 2>&1 &
    echo $!`; it owns the selection only while it runs, so `kill <pid>` afterwards.
-   Click the JWT field, `ctrl+v`, *Use this token*, **Enter the lobby**: `lobby
-   connected` with the channel id and `tick`, `map loaded`, the chips from the map.
+   Click the JWT field, `ctrl+v`, *Use this token*. Expect `Signed in as <32 hex>`
+   (the same shape as on Android; write the shape, not the value, in the commit
+   line). `Signed in as (unverified)` means `canSignIn` was false — an auth field
+   empty in `defines.json` or cleared by hand — and counts as a pass only on the
+   fallback below. `sign-in failed: AuthFailure(network)` is a CORS refusal, a
+   timeout or a wrong base URL: check the preflight from the shell only — never with
+   the extension's network or console readers (the page's own request carries the JWT
+   in `Authorization`) — with no token: `curl -si -X OPTIONS -H 'Origin:
+   http://127.0.0.1:8087' -H 'Access-Control-Request-Method: GET' -H
+   'Access-Control-Request-Headers: authorization'
+   https://auth-dev.yyt.life/c/<ch>/verify` (`<ch>` is `YYT_AUTH_CHANNEL_ID` from
+   `defines.json`) must answer `204` with `access-control-allow-headers` containing
+   `authorization`. A `204` proves only CORS (the handler answers every `OPTIONS`
+   before it looks at the channel). If the preflight is refused, or it is `204` and a
+   second *Use this token* (the JWT is still in the field) fails the same way after
+   the two auth fields were compared with `defines.json`: clear the **Auth channel
+   id** field, *Use this token* again — the unverified path, the gateway verifies the
+   JWT itself — and record `Not run: verify on web — <the preflight status, or the
+   sign-in error when the preflight was 204>`. `the token was refused (401)` or an
+   `AuthFailure(httpStatus, status 404)` is a finding about the channel, not CORS:
+   stop and report it. Then **Enter the lobby**: `lobby connected` with the channel id
+   and `tick`, `map loaded`, the chips from the map.
 4. **The emulator.** `flutter emulators --launch <avd>`, `adb wait-for-device shell
    'until [ "$(getprop sys.boot_completed)" = 1 ]; do sleep 1; done'`, then in
    `examples/playground`:
@@ -402,7 +420,13 @@ in `<scratch>/jwt.txt` are all still there); the Claude in Chrome extension
 The commit lines:
 
 - `Verified: dev gateway on chrome and <avd>, two clients on one lobby; resume 8 s <what you saw>, 30 s <what you saw>` (2026-10-01: both `reconnected, position kept`)
-- `Not run: verify on web (no CORS on /c/{ch}/verify)` — always, beside the first line
+- `Verified: verify on web (Signed in as 32 hex)` — its own line directly after the
+  first, when *Use this token* showed it; otherwise `Not run: verify on web — <the
+  preflight status, or the sign-in error when the preflight was 204>` (step 3), and
+  covered by `Not run: dev gateway on chrome — …` when Chrome did not run at all.
+  The walk of 2026-10-01 (the section's *Walked* note) ran before the auth service's CORS
+  deploy later that day and took the unverified path; no run has recorded the
+  `Verified:` form yet — edit this sentence away once one does.
 - `Verified: dev assets in chrome; resumed download on <avd> (40 MiB, killed and resumed)`
 - `Not run: dev gateway on chrome — no extension` (also when the extension has no permission for the site)
 - `Not run: dev gateway on android — no emulator`

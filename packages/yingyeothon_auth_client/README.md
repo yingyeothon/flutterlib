@@ -61,6 +61,14 @@ final stillValid = await auth.verify(token.jwt); // null on 401
 `token.jwt` is the value for `GatewayClientOptions.token`. The token lives for the
 channel's `tokenTtlSec` (24 h by default); **there is no refresh** — sign in again.
 
+`fetchConfig`, `exchange` and `verify` are plain HTTPS and run on every platform, web
+included: the auth service answers cross-origin calls from any origin (since
+2026-10-01), without credentials — the credential is the request body or the
+`Authorization` header, never a cookie, so a page gains nothing `curl` could not do.
+In a browser `exchange` still needs a provider credential the page legitimately holds;
+the browser flow is the usual path on web, and what the page must do with the returned
+URL is in [Authentication › Receiving the redirect](../../docs/authentication.md#receiving-the-redirect).
+
 ## Failures
 
 `AuthFailure(kind, status)` — `httpStatus`, `notJson`, `missingField`,
