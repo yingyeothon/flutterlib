@@ -55,6 +55,23 @@ abstract interface class KvStoreClient {
   /// shares the stage's request budget and is never cached.
   Future<DateTime> serverTime();
 
+  /// [serverTime] before there is a token: a title screen reads the clock
+  /// with this and nothing else. One request through a client of its own
+  /// (closed afterwards) or through [client], which is left open; a failure
+  /// is a [KvStoreException] as for [serverTime]. Throws [ArgumentError], at
+  /// once, for a [baseUrl] that [KvStoreClientOptions.baseUrl] would refuse.
+  static Future<DateTime> fetchServerTime(
+    Uri baseUrl, {
+    http.Client? client,
+    Logger? logger,
+    Duration? timeout,
+  }) => KvStoreClientImpl.fetchServerTime(
+    baseUrl,
+    client: client,
+    logger: logger,
+    timeout: timeout,
+  );
+
   /// Closes the HTTP client this library created; an injected one is left
   /// to its owner. Idempotent. A request after `close()` on an owned client
   /// fails as a [KvStoreException] with [KvStoreException.networkCode].

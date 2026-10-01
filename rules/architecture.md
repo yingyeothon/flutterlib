@@ -140,10 +140,21 @@
   list changes nothing here.
 - The meta route is the current instance of the exception above (reported to the
   owner 2026-09-30); `yingyeothon_fake_gateway/README.md` owns the details.
-- `GET /time` is the one route sent without the token (`send(authorized: false)`);
-  the `authorization` header is set after the caller's headers, so no caller can
-  replace it. A new unauthenticated route needs the same flag, never a second
-  requester.
+- One requester type, `KvRequester`. The token is pinned once, in its constructor;
+  `send(authorized:)` is the per-call switch, and on an authorized send the
+  `authorization` header is set after the caller's headers so no caller can
+  replace it. `GET /time` is the one route sent with `authorized: false` (this
+  sentence is the only count; the code comments do not repeat it). A
+  `KvRequester(token: null)` is the tokenless configuration: an authorized `send`
+  through it is a `StateError`, thrown before the exchange, a guard no public path
+  reaches today. A new unauthenticated route gets a `KvRoute` member and an
+  instance method with the flag; a static twin (today only `fetchServerTime`)
+  only when a caller needs it before any token exists. The twin and the factory
+  both check their options **before** creating a client (named arguments are
+  evaluated in source order, so the checks come first in the argument list),
+  which is what makes a refusal synchronous and leak-free; the twin passes
+  `token: null`, takes the factory's defaults, owns its client only when none was
+  passed, and closes what it owns when the request settles.
 
 ## Seams
 

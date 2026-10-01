@@ -100,6 +100,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } on StateError catch (e) {
       // An Error, not an Exception: this screen's own "fill this in" checks.
       if (mounted) setState(() => _error = e.toString());
+    } on ArgumentError catch (e) {
+      // A library's local refusal of an edited value (a base URL that is not
+      // a bare http(s) URL); its message names the rule, never the input.
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -179,6 +183,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_error != null || !mounted) return;
     await Navigator.of(context).pushNamed(KvScreen.route);
   }
+
+  Future<void> _serverTime() => _run(() async {
+    session.updateConfig(_readConfig());
+    await session.fetchServerTime();
+  });
 
   Future<void> _openAssets() async {
     await _run(() async {
@@ -310,6 +319,12 @@ class _LoginScreenState extends State<LoginScreen> {
             key: const Key('open-assets'),
             onPressed: _busy ? null : _openAssets,
             child: const Text('Asset bundle'),
+          ),
+          // No sign-in: the one state route that belongs to nobody.
+          FilledButton.tonal(
+            key: const Key('server-time'),
+            onPressed: _busy ? null : _serverTime,
+            child: const Text('Server time'),
           ),
           if (_error != null)
             Padding(

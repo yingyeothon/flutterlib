@@ -13,10 +13,12 @@ final class KvStoreClientImpl implements KvStoreClient {
   /// Creates the client; a `null` `client` option is one this owns.
   KvStoreClientImpl(KvStoreClientOptions options)
     : _requester = KvRequester(
-        client: options.client ?? http.Client(),
-        ownsClient: options.client == null,
+        // Named arguments are evaluated in source order: the checks come
+        // before the client is created, so a refused option leaks none.
         baseUrl: _checkBaseUrl(options.baseUrl),
         token: _checkToken(options.token),
+        client: options.client ?? http.Client(),
+        ownsClient: options.client == null,
         logger: options.logger ?? nullLogger,
         timeout: options.timeout ?? defaultTimeout,
       );
@@ -61,9 +63,33 @@ final class KvStoreClientImpl implements KvStoreClient {
   KvCollection collection(String nameOrId) =>
       KvCollectionImpl(_requester, nameOrId);
 
+  /// `KvStoreClient.fetchServerTime`: one tokenless requester for one
+  /// request, closed afterwards when this created its client.
+  static Future<DateTime> fetchServerTime(
+    Uri baseUrl, {
+    http.Client? client,
+    Logger? logger,
+    Duration? timeout,
+  }) {
+    // Checked before anything is created, so a refused URL throws
+    // synchronously, like the factory, and leaks no client.
+    final checked = _checkBaseUrl(baseUrl);
+    final requester = KvRequester(
+      client: client ?? http.Client(),
+      ownsClient: client == null,
+      baseUrl: checked,
+      token: null,
+      logger: logger ?? nullLogger,
+      timeout: timeout ?? defaultTimeout,
+    );
+    return _serverTime(requester).whenComplete(requester.close);
+  }
+
   @override
-  Future<DateTime> serverTime() async {
-    final answer = await _requester.send(
+  Future<DateTime> serverTime() => _serverTime(_requester);
+
+  static Future<DateTime> _serverTime(KvRequester requester) async {
+    final answer = await requester.send(
       'GET',
       KvRoute.time,
       KvPaths.time,

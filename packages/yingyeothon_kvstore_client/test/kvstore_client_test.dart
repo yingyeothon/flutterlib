@@ -828,6 +828,48 @@ void main() {
       expect(log.lines.join('\n'), isNot(contains(fixtureToken)));
     });
 
+    test('fetchServerTime: the clock with no client and no token', () async {
+      fake.answer(
+        200,
+        '{"now":"2026-09-30T00:00:01.250Z","epochMs":1790726401250}',
+      );
+      final at = await KvStoreClient.fetchServerTime(
+        Uri.parse('https://doc.example/base/'),
+        client: fake,
+        logger: createFilteredLogger(severity: LogSeverity.debug, writer: log),
+      );
+      final request = fake.single;
+      expect(request.method, 'GET');
+      expect(request.url.toString(), 'https://doc.example/base/time');
+      expect(request.headers.containsKey('authorization'), isFalse);
+      expect(request.headers['accept'], 'application/json');
+      expect(at.isUtc, isTrue);
+      expect(at.millisecondsSinceEpoch, 1790726401250);
+      expect(log.lines.join('\n'), contains('"route":"time"'));
+      // An injected client is the caller's; it stays open.
+      expect(fake.closed, isFalse);
+      // The same refusals as serverTime, and the same base URL check.
+      fake.answer(503, '{"error":{"code":"unavailable","message":"x"}}');
+      final e = await refused(
+        () => KvStoreClient.fetchServerTime(
+          Uri.parse('https://doc.example'),
+          client: fake,
+        ),
+      );
+      expect(e.code, 'unavailable');
+      // Synchronous, like the factory: nothing is created for a bad URL.
+      Object? sync;
+      try {
+        unawaited(
+          KvStoreClient.fetchServerTime(Uri.parse('/time'), client: fake),
+        );
+      } on ArgumentError catch (e) {
+        sync = e;
+      }
+      expect(sync, isA<ArgumentError>());
+      expect(fake.requests, hasLength(2));
+    });
+
     test('serverTime: a malformed answer or a refusal', () async {
       for (final body in <String>[
         '[]',

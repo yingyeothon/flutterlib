@@ -146,15 +146,20 @@ final mail = [...page.entries]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt
 
 ## The platform clock
 
-`kv.serverTime()` is `GET /time`, the platform's clock in UTC. The request carries
-no token, but it goes through a `KvStoreClient`, so it comes after sign-in. A
-client-only game has no clock it can trust for a daily reset or an event window;
-call it once per session and keep the offset from the device clock:
+`kv.serverTime()` is `GET /time`, the platform's clock in UTC; the request carries
+no token. A client-only game has no clock it can trust for a daily reset or an
+event window; call it once per session and keep the offset from the device clock:
 
 ```dart
 final offset = (await kv.serverTime()).difference(DateTime.now());
 DateTime now() => DateTime.now().add(offset);
 ```
+
+Before sign-in there is no `KvStoreClient`; a title screen reads the clock with the
+static `KvStoreClient.fetchServerTime(Uri.parse('https://doc.yyt.life'))`, one
+request through a client of its own, closed afterwards (pass `client:` to reuse
+yours; it is left open). It answers UTC and fails the same way, with a
+`KvStoreException`; a `baseUrl` the options would refuse is an `ArgumentError`.
 
 Do not poll it: it shares the stage's request budget with every kv call. The fake
 gateway's `/time` is the real clock of the machine it runs on.

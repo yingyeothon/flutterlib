@@ -107,7 +107,8 @@ such key". Two tiers:
 
 Either scope `user` puts the entries under `/u/{ownerId}` (`isUserNamespace`); there
 `KvEntry.from` / `KvListEntry.from` name the writer. `acceptsMail` collections take a
-player's create-only `owner(id).put`, and `serverTime()` reads the platform clock.
+player's create-only `owner(id).put`, and `serverTime()` reads the platform clock
+(`KvStoreClient.fetchServerTime(baseUrl)` reads it before there is a token).
 The rules and the pitfalls are in the guide:
 [Mail and the writer stamp](../../docs/kvstore.md#mail-and-the-writer-stamp),
 [The platform clock](../../docs/kvstore.md#the-platform-clock).
@@ -138,7 +139,8 @@ a connection failure; `malformed_response` (with the answer's status) is a body 
 
 ## Public API
 
-- `KvStoreClient` (`collection`, `serverTime`, `close`), `KvStoreClientOptions`
+- `KvStoreClient` (`collection`, `serverTime`, `close`, and the static
+  `fetchServerTime` for before sign-in), `KvStoreClientOptions`
   (`baseUrl`, `token`, `client`, `logger`, `timeout`).
 - `KvCollection` (`ref`, `info`, `mine`, `owner`), `KvNamespace` (`get`, `getEntry`,
   `put`, `delete`, `list`, `incr`).

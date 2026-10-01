@@ -64,15 +64,24 @@ final class KvAnswer {
 /// status and the body size are logged.
 final class KvRequester {
   /// Creates a requester over [client]; [ownsClient] says whether [close]
-  /// closes it.
+  /// closes it. A `null` [token] is a requester for a route that belongs to
+  /// nobody: an authorized request through it is a [StateError], thrown
+  /// before the exchange and never mapped to [KvStoreException.networkCode].
   KvRequester({
     required http.Client client,
     required bool ownsClient,
     required Uri baseUrl,
-    required String token,
+    required String? token,
     required Logger logger,
     required Duration timeout,
-  }) : this._(client, ownsClient, baseUrl, 'Bearer $token', logger, timeout);
+  }) : this._(
+         client,
+         ownsClient,
+         baseUrl,
+         token == null ? null : 'Bearer $token',
+         logger,
+         timeout,
+       );
 
   KvRequester._(
     this._client,
@@ -90,7 +99,7 @@ final class KvRequester {
   final http.Client _client;
   final bool _ownsClient;
   final Uri _baseUrl;
-  final String _authorization;
+  final String? _authorization;
   final Logger _logger;
   final Duration _timeout;
   bool _closed = false;
@@ -103,8 +112,8 @@ final class KvRequester {
   }
 
   /// Sends one request and returns its 2xx answer; a refusal is a
-  /// [KvStoreException]. [authorized] `false` leaves the token off, for the
-  /// one route that belongs to nobody (`GET /time`).
+  /// [KvStoreException]. [authorized] `false` leaves the token off, for a
+  /// route that belongs to nobody (`rules/architecture.md` says which).
   Future<KvAnswer> send(
     String method,
     KvRoute route,
@@ -125,7 +134,11 @@ final class KvRequester {
           )
           ..headers['accept'] = 'application/json'
           ..headers.addAll(headers);
-    if (authorized) request.headers['authorization'] = _authorization;
+    if (authorized) {
+      final authorization = _authorization;
+      if (authorization == null) throw StateError('kv token is required');
+      request.headers['authorization'] = authorization;
+    }
     if (body != null) {
       // Body first: the setter would append a charset to a content type set
       // before it, and the header is pinned by a test.

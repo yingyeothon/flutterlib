@@ -54,6 +54,10 @@ never goes into this repository: pass it with `--dart-define-from-file=local/ass
 history keeps. It needs no sign-in. The offline demo serves an
 encrypted bundle under a key it makes at start.
 
+**Server time** reads the platform clock with `KvStoreClient.fetchServerTime`, before
+sign-in, from `YYT_KV_BASE_URL`; the answer is a `server time: …` line in the log
+panel and nothing else.
+
 Sign in with **GitHub** or **Google**: the app opens the browser with the redirect
 URL from the login screen (default `http://localhost/signin`, **which must be on the
 auth channel's allowlist**); a desktop build has no deep link, so the browser lands

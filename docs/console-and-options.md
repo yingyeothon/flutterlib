@@ -47,6 +47,9 @@ starts a dungeon ([Dungeon](dungeon.md)).
 | `timeout` | 15 s | one deadline for the headers and the body |
 | `logger` | `nullLogger` | `kv request` lines: method, route kind, status, bytes |
 
+The static `KvStoreClient.fetchServerTime(baseUrl)` takes the same three, with the
+same defaults, for the one request it makes.
+
 ## What the console setting becomes in `hello`
 
 | Channel setting | `hello` field | SDK |

@@ -478,6 +478,18 @@ class Session extends ChangeNotifier {
   /// See [announcementsCollection].
   static const String profileCollection = 'profile';
 
+  /// The platform clock before sign-in: one request, no token, no client
+  /// kept. What a title screen does for a daily reset.
+  Future<DateTime> fetchServerTime() async {
+    if (!config.canUseKv) throw StateError('key-value base URL is required');
+    // tryParse: a FormatException would quote the pasted text.
+    final baseUrl = Uri.tryParse(config.kvBaseUrl);
+    if (baseUrl == null) throw StateError('key-value base URL is not a URL');
+    final at = await KvStoreClient.fetchServerTime(baseUrl, logger: logger);
+    note('server time: ${at.toIso8601String()}');
+    return at;
+  }
+
   /// Creates (or recreates) the client from the config and the token.
   KvStoreClient openKv() {
     final jwt = token?.jwt;
