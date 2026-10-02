@@ -167,6 +167,13 @@ cannot trust reports no `total`: a compressed body, and in a browser any whole-f
 answer. Whatever the sink or `onProgress` throws ends the download, releases the
 connection and reaches you unchanged — that is also how to cancel one from the UI
 (throw from `onProgress`); a stalled body ends by itself after `bodyIdleTimeout`.
+To stop one without waiting for the network, even on a connection that went quiet,
+pass `cancel:` a future and complete it: the request in flight is aborted, the
+download ends as `cancelled`, and the sink keeps what it holds (a piece already in
+hand may still reach it first). The client and its other reads carry on — those the
+sink or `onProgress` start included — so there is no need to close a shared client,
+or to own one per download. A `cancel` already complete when the call starts sends no
+request, and one future may serve many downloads.
 
 `downloadToFile` in `yingyeothon_asset_client_io.dart` is that recipe for a file;
 its doc comment says what it writes where and how it resumes. **The file is the
@@ -174,6 +181,59 @@ plaintext, decrypted**: put it in the app's private storage. Run one call per
 destination at a time, and delete the two side files to give up on a download. It
 is a separate library because a `part` of the core would share its `dart:io` import
 and stop the core compiling for web.
+
+### Verified files
+
+What the CDN says about a file — its ETag and length — names the object, not the
+bytes the app's manifest meant. `downloadToFile` checks what the app trusts, all
+optional, and with none of them behaves as it always did:
+
+- `expectedSize`: the plaintext length. A chunk that would pass it is refused before
+  it is written, and a short file fails at the end: `size_mismatch`. A part already
+  longer is discarded before any request.
+- `expectedSha256`: the plaintext's SHA-256, 64 hex digits. A resumed download hashes
+  the bytes already in the part too, re-read from disk in pieces (no progress is
+  reported meanwhile), so a damaged local prefix is caught even though a keyed client
+  only verifies what it fetched: `digest_mismatch`.
+- `validate(partPath)`: the app's own check, run after both of those, with the part
+  flushed and closed and before the rename (a SQLite file can be opened here).
+  **Return `false` for a file that is not usable** — catch your format's error to do
+  so — which is `asset_rejected` and deletes the part. Throw only for a failure that
+  says nothing about the file: the throw reaches the caller unchanged and the part
+  stays, so the next call checks the same part again rather than fetching it. Open
+  the part read-only: a part whose size or modification time changed by the rename,
+  or that is no longer a plain file, is `digest_mismatch` and deleted. Files the
+  check leaves beside it (a SQLite `-journal`, `-wal` or `-shm`) are the app's to
+  delete.
+- `discardOnLocalFailure`: delete the side files when reading or writing them fails,
+  as on a full disk, instead of leaving the space held.
+- `cancel`: that of `download`, also checked while a part is re-read and around
+  `validate`; once the rename has begun the call completes.
+
+With both `expectedSize` and `expectedSha256`, a part that is already that long — the
+app died between the last byte and the rename — is hashed and finished without a
+request, reported once as complete with the sidecar's ETag, or `null` when there is
+none (or it is not short printable text). Size alone is not proof, so without the
+digest the part goes through the usual resume. A same-size part with another digest
+is deleted and the file fetched afresh. An empty file is a file like any other: its
+digest is that of no bytes.
+
+The destination is replaced only once every check passed; on any failure a file
+already there is untouched. What a failure does with the side files:
+
+| Failure | `.part` and `.part.etag` |
+| --- | --- |
+| `size_mismatch`, `digest_mismatch`, `asset_rejected` | deleted |
+| a `FileSystemException` reading or writing them | deleted with `discardOnLocalFailure`, kept otherwise |
+| anything else: `network`, `http`, `not_found`, `asset_corrupt`, `cancelled`, a closed client, a throw from `onProgress` or `validate`, a failed rename | kept, to resume or finish offline |
+
+A side file that cannot be deleted stays, and the error the caller sees is still the
+one that ended the download. After a successful rename a sidecar that cannot be
+deleted is left for the next call to discard, and the call succeeds.
+
+These checks are only as good as where the expected values come from: a manifest read
+from the same plain bundle tells a version mix-up or local damage from the file it
+names, not a CDN that serves both altered.
 
 ## Browsers and `corsSafe`
 
@@ -219,6 +279,10 @@ a colon, and never a key, a URL, a path or a byte of plaintext.
 | `asset_corrupt` | a length no ciphertext has, a failed tag, a wrong key, path or version, or `readJson` on bytes that are not UTF-8 JSON |
 | `http` | any other status, a host that ignores `Range`, a `206` that is not the range asked for, an object that kept changing, a plain body larger than any asset |
 | `network` | no answer, or none within `responseTimeout` (no transport error message crosses), or a body that failed, stalled past `bodyIdleTimeout`, ended early or ran past its stated length |
+| `cancelled` | the `cancel` future given to `download` or `downloadToFile` completed |
+| `size_mismatch` | `downloadToFile` got more or fewer plaintext bytes than `expectedSize` |
+| `digest_mismatch` | `downloadToFile` got bytes whose SHA-256 is not `expectedSha256` |
+| `asset_rejected` | the `validate` callback of `downloadToFile` returned `false` |
 
 Local misuse — a malformed `baseUrl` or path, a negative offset, an empty resume
 ETag — is an `ArgumentError` before any request. The one `ArgumentError` that comes
@@ -266,7 +330,9 @@ failure (resume instead), no key rotation.
   `responseTimeout`, `bodyIdleTimeout`, `effectiveCorsSafe`).
 - `AssetSink`, `AssetResume`, `AssetDownloadProgress`, `AssetDownloadResult`.
 - `AssetClientException`, `AssetClientErrorCode`.
-- `yingyeothon_asset_client_io.dart`: `downloadToFile`, and the core re-exported.
+- `yingyeothon_asset_client_io.dart`: `downloadToFile` (`onProgress`, `noCache`,
+  `expectedSize`, `expectedSha256`, `validate`, `discardOnLocalFailure`, `cancel`),
+  and the core re-exported.
 
 ## Differences from @yingyeothon/asset-client and Yingyeothon.AssetClient
 
@@ -291,6 +357,10 @@ failure (resume instead), no key rotation.
   `bad_key` never means "WebCrypto refused the key"; the key cannot be made
   non-extractable, so the client zeroes its own copies instead.
 - A file download ships as `downloadToFile` in a separate `dart:io` library; tslib
-  leaves the file sink to a documented recipe.
+  leaves the file sink to a documented recipe. Its size, digest and validator checks,
+  and their codes `size_mismatch`, `digest_mismatch` and `asset_rejected`, have no
+  tslib counterpart.
+- `download` takes a `cancel` future and fails as `cancelled`; tslib has no
+  cancellation but a sink or progress callback that throws.
 - The C# client in `csharplib` is planned to follow the same shape; it does not exist
   yet.

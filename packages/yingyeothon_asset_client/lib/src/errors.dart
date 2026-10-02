@@ -24,6 +24,21 @@ abstract final class AssetClientErrorCode {
   /// The request never got an answer (in time), or a body failed, stalled,
   /// ended early or ran past its stated length.
   static const String network = 'network';
+
+  /// The `cancel` future given to `download` completed. The sink keeps what
+  /// it holds, so a later download resumes from there.
+  static const String cancelled = 'cancelled';
+
+  /// `downloadToFile` received more or fewer plaintext bytes than its
+  /// `expectedSize`.
+  static const String sizeMismatch = 'size_mismatch';
+
+  /// `downloadToFile` received bytes whose SHA-256 is not its
+  /// `expectedSha256`.
+  static const String digestMismatch = 'digest_mismatch';
+
+  /// The `validate` callback of `downloadToFile` returned `false`.
+  static const String assetRejected = 'asset_rejected';
 }
 
 /// The one exception the client throws for a bad key, a refused or failed

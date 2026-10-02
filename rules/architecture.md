@@ -236,6 +236,52 @@
   fake, then replace `fcb8f49` in this bullet (both places) with the newest commit
   you read. An empty list changes nothing here.
 
+## The asset client (`asset_client`)
+
+Files: `lib/src/internal/client_impl.dart` (`download`, `_OuterSink`, `_restarting`),
+`lib/src/internal/http.dart` (`CancelSignal`, `_orCancelled`, `Requester.send`,
+`BodyReader`), `lib/yingyeothon_asset_client_io.dart` (`downloadToFile`,
+`_CallerError`, `_promote`).
+
+- **The cancel signal rides a zone, and the caller's callbacks must not.**
+  `download(cancel:)` runs under `runZoned` with the `CancelSignal` under
+  `cancelKey`, so every request and body read below finds it (`currentCancel()`).
+  The two callbacks the caller passes per call — the sink and `onProgress` — are
+  therefore called in the caller's zone (`_OuterSink`, `outer.runUnary`). Tests:
+  `asset_client_test.dart`, "a read the sink starts does not inherit the cancel"
+  and "a read onProgress starts does not inherit the cancel". A download without
+  `cancel` also runs under `cancelKey: null`: no public path reaches it while the
+  wrapping holds, so no test pins it — it is the second fence for a callback added
+  later without the wrapping, and stays. What the caller gives
+  once, in the options (the `http.Client`, the logger), is not a per-call callback
+  and stays where it is.
+- Each wait on the network registers on the signal with `CancelSignal.listen` and
+  calls the remover when it no longer needs it: `_orCancelled` when its future
+  settles, and `Requester.send`'s abort listener when the body is done
+  (`BodyReader._finish`) — **not** when the headers arrive, since aborting the
+  request is what frees the connection of a body that stalled. A listener added
+  per chunk and never removed accumulates on a future the app may keep for a
+  screen's lifetime. Known gap: the removal is untested, because a test would need
+  the internal `CancelSignal` and tests import no `src/internal` (CONVENTIONS.md,
+  *Interfaces with factory constructors*); keep the remover calls when refactoring.
+- `_restarting` checks the signal before `onChanged` resets the sink, so a cancelled
+  download never wipes what the sink holds; keep the check before the reset.
+- A `cancel` future is watched — `CancelSignal(cancel)` constructed, which attaches
+  its error handler — before any argument check, in `download` and in
+  `downloadToFile`; otherwise one the caller later completes with an error is an
+  uncaught error (tests: "a cancel that fails after a refused path…" in
+  `asset_client_test.dart`, "…after a refused argument…" in
+  `io_verified_download_test.dart`).
+- `downloadToFile`'s private `_download` decides by exception type in the `try`
+  around `transfer()` (a `FileSystemException` is a local failure, `size_mismatch`
+  deletes the part). A caller's code must never be classified as one of those:
+  `onProgress` throws cross wrapped in `_CallerError` and are unwrapped in
+  `downloadToFile`, and `validate` runs in `_promote`, after that `try` (tests in
+  `io_verified_download_test.dart`: "what onProgress throws is the caller's…", "a
+  FileSystemException from validate keeps the part…"). The
+  `_FileSink` is the function's own, not the caller's: its `size_mismatch` must
+  stay classified.
+
 ## Seams
 
 - Transport: `GatewayWebSocketFactory` / `GatewayWebSocket` (`Stream<SocketEvent>`). The

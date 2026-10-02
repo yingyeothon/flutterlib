@@ -105,12 +105,24 @@ abstract interface class AssetBundleClient {
   /// throws ends the download and reaches the caller unchanged. A keyed
   /// resume offset past the end of the file is an [ArgumentError], raised
   /// only once the last segment verified; a plain one starts over.
+  ///
+  /// When [cancel] completes — with a value or an error — the download ends
+  /// as `AssetClientException` (`cancelled`) without waiting for the
+  /// network: the request in flight is aborted and a body it waits on is
+  /// released, stalled or not. A piece already in hand may still reach the
+  /// sink first, and a download whose last piece is written completes. The
+  /// sink keeps what it holds, and this client and its other reads —
+  /// including any the sink or [onProgress] start — carry on. A [cancel]
+  /// already complete when the call starts sends no request. One future may
+  /// serve many downloads, a whole screen's say: a finished download leaves
+  /// one small callback on it, and nothing of its requests.
   Future<AssetDownloadResult> download(
     String path, {
     required AssetSink sink,
     AssetResume? resume,
     void Function(AssetDownloadProgress progress)? onProgress,
     bool noCache = false,
+    Future<void>? cancel,
   });
 
   /// Zeroes the key and every derived key, and releases the default HTTP

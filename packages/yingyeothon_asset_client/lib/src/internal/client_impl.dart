@@ -146,8 +146,10 @@ final class AssetBundleClientImpl implements AssetBundleClient {
       try {
         return await attempt();
       } on _Changed catch (changed) {
-        // Never reset a sink for a client closed meanwhile.
+        // Never reset a sink for a client closed or a download cancelled
+        // meanwhile: the sink keeps what it holds.
         if (_closed) throw StateError('asset client is closed');
+        if (currentCancel()?.isSet ?? false) throw cancelledError;
         if (restart >= _maxRestarts) {
           throw _httpError(changed.status, 'the object kept changing');
         }
@@ -890,7 +892,11 @@ final class AssetBundleClientImpl implements AssetBundleClient {
     AssetResume? resume,
     void Function(AssetDownloadProgress progress)? onProgress,
     bool noCache = false,
+    Future<void>? cancel,
   }) async {
+    // Watched first: a cancel completed with an error after a refused
+    // argument must not surface as an uncaught error.
+    final signal = cancel == null ? null : CancelSignal(cancel);
     final file = _fileOf(path);
     var offset = 0;
     String? etag;
@@ -901,9 +907,41 @@ final class AssetBundleClientImpl implements AssetBundleClient {
       }
       etag = resume.etag;
     }
-    return _encrypted
-        ? _downloadEncrypted(file, sink, onProgress, offset, etag, noCache)
-        : _downloadPlain(file, sink, onProgress, offset, etag, noCache);
+    // The caller's code runs in the caller's zone, never in this
+    // download's: a read it starts must not inherit this cancel signal.
+    final outer = Zone.current;
+    final callerSink = _OuterSink(outer, sink);
+    final callerProgress = onProgress == null
+        ? null
+        : (AssetDownloadProgress p) => outer.runUnary(onProgress, p);
+    Future<AssetDownloadResult> run() => _encrypted
+        ? _downloadEncrypted(
+            file,
+            callerSink,
+            callerProgress,
+            offset,
+            etag,
+            noCache,
+          )
+        : _downloadPlain(
+            file,
+            callerSink,
+            callerProgress,
+            offset,
+            etag,
+            noCache,
+          );
+    // Without a signal of its own, a download also drops any it was
+    // started under.
+    if (signal == null) {
+      return runZoned(run, zoneValues: <Object, Object?>{cancelKey: null});
+    }
+    // One turn of the microtask queue: a cancel that had already completed
+    // has fired by now, and no request goes out for it.
+    await Future<void>.value();
+    if (signal.isSet) throw cancelledError;
+    // Every request and body read below finds the signal in the zone.
+    return runZoned(run, zoneValues: <Object, Object?>{cancelKey: signal});
   }
 
   @override
@@ -913,4 +951,18 @@ final class AssetBundleClientImpl implements AssetBundleClient {
     _crypto?.close();
     if (_ownsHttp) _http.close();
   }
+}
+
+/// The caller's sink, called in the caller's zone.
+final class _OuterSink implements AssetSink {
+  _OuterSink(this._zone, this._sink);
+
+  final Zone _zone;
+  final AssetSink _sink;
+
+  @override
+  FutureOr<void> write(Uint8List chunk) => _zone.runUnary(_sink.write, chunk);
+
+  @override
+  FutureOr<void> reset() => _zone.run(_sink.reset);
 }

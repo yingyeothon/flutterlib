@@ -1109,6 +1109,154 @@ void main() {
     );
   });
 
+  group('cancelling a download', () {
+    test('headers that never come: cancelled at once, no warn line', () async {
+      final lines = Lines();
+      final client = AssetBundleClient(
+        AssetBundleClientOptions(
+          baseUrl: base,
+          client: _SilentClient(),
+          logger: createFilteredLogger(
+            severity: LogSeverity.debug,
+            writer: lines,
+          ),
+        ),
+      );
+      final cancel = Completer<void>();
+      final download = client.download(
+        'f',
+        sink: MemorySink(),
+        cancel: cancel.future,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      cancel.complete();
+      final watch = Stopwatch()..start();
+      await expectLater(download, failsWith(AssetClientErrorCode.cancelled, 0));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(lines.lines, isEmpty);
+    });
+
+    test('a stalled body: cancelled at once, the sink keeps its bytes, the '
+        'client and its other reads carry on', () async {
+      final cdn = FakeCdn();
+      cdn.serve('${base}g', pattern(10));
+      final client = AssetBundleClient(
+        AssetBundleClientOptions(
+          baseUrl: base,
+          client: _Routing(<String, http.Client>{
+            '${base}f': _StallingClient(),
+          }, cdn),
+        ),
+      );
+      final sink = MemorySink();
+      final cancel = Completer<void>();
+      final download = client.download(
+        'f',
+        sink: sink,
+        cancel: cancel.future,
+        onProgress: (_) => Timer.run(cancel.complete),
+      );
+      final other = client.read('g');
+      await expectLater(download, failsWith(AssetClientErrorCode.cancelled));
+      expect(sink.bytes, <int>[1, 2, 3]);
+      expect(await other, pattern(10));
+      expect(await client.read('g'), pattern(10));
+    });
+
+    test('a read the sink starts does not inherit the cancel', () async {
+      final s = Setup();
+      s.serve('f', pattern(200000));
+      s.serve('g', pattern(10));
+      final cancel = Completer<void>();
+      Future<Uint8List>? other;
+      final sink = _CallbackSink(() {
+        if (other != null) return;
+        other = Future<void>.delayed(const Duration(milliseconds: 20))
+            .then((_) => s.client.read('g'));
+        cancel.complete();
+      });
+      final download = s.client.download(
+        'f',
+        sink: sink,
+        cancel: cancel.future,
+      );
+      await expectLater(download, failsWith(AssetClientErrorCode.cancelled));
+      expect(await other, pattern(10));
+    });
+
+    test('a read onProgress starts does not inherit the cancel', () async {
+      final s = Setup();
+      s.serve('f', pattern(200000));
+      s.serve('g', pattern(10));
+      final cancel = Completer<void>();
+      Future<Uint8List>? other;
+      final download = s.client.download(
+        'f',
+        sink: _CountingSink(),
+        cancel: cancel.future,
+        onProgress: (_) {
+          if (other != null) return;
+          // Its first wait comes after the cancel below.
+          other = Future<void>.delayed(const Duration(milliseconds: 20))
+              .then((_) => s.client.read('g'));
+          cancel.complete();
+        },
+      );
+      await expectLater(download, failsWith(AssetClientErrorCode.cancelled));
+      expect(await other, pattern(10));
+    });
+
+    test('a cancel that fails after a refused path is not an uncaught '
+        'error', () async {
+      final s = Setup();
+      final cancel = Completer<void>();
+      await expectLater(
+        s.client.download('../f', sink: MemorySink(), cancel: cancel.future),
+        throwsA(isA<ArgumentError>()),
+      );
+      cancel.completeError(StateError('screen closed'));
+      await pumpEventQueue();
+    });
+
+    test('a cancel that fails with an error still cancels', () async {
+      final s = Setup();
+      s.serve('f', pattern(200000));
+      final cancel = Completer<void>();
+      final download = s.client.download(
+        'f',
+        sink: _CountingSink(),
+        cancel: cancel.future,
+        onProgress: (_) {
+          if (!cancel.isCompleted) cancel.completeError(StateError('gone'));
+        },
+      );
+      await expectLater(download, failsWith(AssetClientErrorCode.cancelled));
+    });
+
+    test('an already-completed cancel sends no request', () async {
+      final s = Setup();
+      s.serve('f', pattern(10));
+      await expectLater(
+        s.client.download('f', sink: MemorySink(), cancel: Future.value()),
+        failsWith(AssetClientErrorCode.cancelled),
+      );
+      expect(s.cdn.requests, isEmpty);
+    });
+
+    test('a cancel that never fires changes nothing', () async {
+      final s = Setup();
+      s.serve('f', pattern(150000));
+      final sink = MemorySink();
+      final result = await s.client.download(
+        'f',
+        sink: sink,
+        cancel: Completer<void>().future,
+      );
+      expect(result.bytes, 150000);
+      expect(sink.bytes, pattern(150000));
+    });
+  });
+
   group('closing and logging', () {
     test(
       'close() while waiting for headers ends the read as StateError',
@@ -1271,6 +1419,16 @@ final class _ClosingSink implements AssetSink {
   void reset() {}
 }
 
+/// Calls [onWrite] on every write.
+final class _CallbackSink implements AssetSink {
+  _CallbackSink(this.onWrite);
+  final void Function() onWrite;
+  @override
+  void write(Uint8List chunk) => onWrite();
+  @override
+  void reset() {}
+}
+
 final class _CountingSink implements AssetSink {
   int bytes = 0;
   @override
@@ -1327,6 +1485,17 @@ final class _StallingClient extends http.BaseClient {
     controller.add(<int>[1, 2, 3]);
     return http.StreamedResponse(controller.stream, 200);
   }
+}
+
+/// Sends a request for a URL in [routes] to that client, any other to
+/// [fallback].
+final class _Routing extends http.BaseClient {
+  _Routing(this.routes, this.fallback);
+  final Map<String, http.Client> routes;
+  final http.Client fallback;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      (routes[request.url.toString()] ?? fallback).send(request);
 }
 
 /// Never answers.

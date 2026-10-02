@@ -86,6 +86,92 @@ AssetClientException networkError(int status, String detail) =>
       detail: detail,
     );
 
+/// `cancelled`: the caller's cancel signal fired.
+const AssetClientException cancelledError = AssetClientException(
+  AssetClientErrorCode.cancelled,
+);
+
+/// The zone key under which a `download` runs with its caller's signal.
+final Object cancelKey = Object();
+
+/// A caller's cancel future, observed: [isSet] once it completed, with a
+/// value or an error. Listeners are added per wait and removed after it, so
+/// a long-lived future shared by many downloads holds none of them.
+final class CancelSignal {
+  /// Watches [trigger]; its error, if any, is handled here.
+  CancelSignal(Future<void> trigger) {
+    trigger.then<void>(
+      (_) => _set(),
+      onError: (Object _, StackTrace _) => _set(),
+    );
+  }
+
+  bool _isSet = false;
+  final Set<void Function()> _listeners = <void Function()>{};
+
+  /// Whether the signal fired.
+  bool get isSet => _isSet;
+
+  /// Calls [onSet] once when the signal fires (now, if it has); the
+  /// returned function removes it.
+  void Function() listen(void Function() onSet) {
+    if (_isSet) {
+      onSet();
+      return () {};
+    }
+    // A wrapper per call, so the same function added twice is two entries.
+    void entry() => onSet();
+    _listeners.add(entry);
+    return () => _listeners.remove(entry);
+  }
+
+  void _set() {
+    if (_isSet) return;
+    _isSet = true;
+    final listeners = List<void Function()>.of(_listeners);
+    _listeners.clear();
+    for (final listener in listeners) {
+      listener();
+    }
+  }
+}
+
+/// The signal of the `download` this code runs under, if it has one.
+CancelSignal? currentCancel() {
+  final signal = Zone.current[cancelKey];
+  return signal is CancelSignal ? signal : null;
+}
+
+/// Thrown into a race when the signal wins it.
+final class _Cancelled implements Exception {
+  const _Cancelled();
+}
+
+/// [work], or [_Cancelled] as soon as [signal] fires, whichever is first.
+/// The listener is gone once either happened.
+Future<T> _orCancelled<T>(Future<T> work, CancelSignal? signal) {
+  if (signal == null) return work;
+  if (signal.isSet) {
+    work.ignore();
+    return Future<T>.error(const _Cancelled());
+  }
+  final race = Completer<T>();
+  final remove = signal.listen(() {
+    if (!race.isCompleted) race.completeError(const _Cancelled());
+  });
+  work.then(
+    (value) {
+      remove();
+      if (!race.isCompleted) race.complete(value);
+    },
+    onError: (Object error, StackTrace stack) {
+      remove();
+      if (!race.isCompleted) race.completeError(error, stack);
+    },
+  );
+  return race.future;
+}
+
 /// Whether [r] is a character a log line or a label must not carry as is:
 /// C0 and C1 controls; the format characters — directional marks,
 /// embeddings, overrides and isolates, zero-width characters,
@@ -144,25 +230,47 @@ String loggablePath(String path) {
 
 /// Reads a body in exact-sized pieces without holding more of it than one
 /// piece: a download of 256 MiB keeps one 64 KiB segment in memory. Every
-/// piece must arrive within the idle timeout, and a client closed meanwhile
-/// ends the read with a [StateError].
+/// piece must arrive within the idle timeout, a client closed meanwhile
+/// ends the read with a [StateError], and the download's cancel signal ends
+/// it at once as `cancelled`.
 final class BodyReader {
-  BodyReader._(this._stream, this._status, this._idle, this._isClosed)
-    : _iterator = StreamIterator<List<int>>(_stream);
+  BodyReader._(
+    this._stream,
+    this._status,
+    this._idle,
+    this._isClosed,
+    this._cancel,
+    this._release,
+  ) : _iterator = StreamIterator<List<int>>(_stream);
 
   final Stream<List<int>> _stream;
   final StreamIterator<List<int>> _iterator;
   final Duration _idle;
   final bool Function() _isClosed;
+  final CancelSignal? _cancel;
+
+  /// Drops the request's abort listener: called once the body is done.
+  final void Function() _release;
   bool _started = false;
+
+  bool get _cancelled => _cancel?.isSet ?? false;
   final int _status;
   Uint8List? _pending;
   bool _finished = false;
+
+  void _finish() {
+    _finished = true;
+    _release();
+  }
 
   Future<Uint8List?> _pull() async {
     if (_isClosed()) {
       await cancel();
       throw StateError('asset client is closed');
+    }
+    if (_cancelled) {
+      await cancel();
+      throw cancelledError;
     }
     final pending = _pending;
     if (pending != null) {
@@ -172,7 +280,7 @@ final class BodyReader {
     if (_finished) return null;
     _started = true;
     try {
-      while (await _iterator.moveNext().timeout(_idle)) {
+      while (await _orCancelled(_iterator.moveNext().timeout(_idle), _cancel)) {
         final chunk = _iterator.current;
         if (chunk.isNotEmpty) {
           // A piece that arrives after a close is not handed on.
@@ -180,21 +288,32 @@ final class BodyReader {
             await cancel();
             throw StateError('asset client is closed');
           }
+          if (_cancelled) {
+            await cancel();
+            throw cancelledError;
+          }
           return chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
         }
       }
     } on TimeoutException {
       await cancel();
       if (_isClosed()) throw StateError('asset client is closed');
+      if (_cancelled) throw cancelledError;
       throw networkError(_status, 'the body stalled');
     } on Object {
       // Nothing of the transport's error crosses: it may name the URL. A
-      // client closed under the read is the caller's doing, not the host's.
-      _finished = true;
+      // client closed or a download cancelled under the read is the
+      // caller's doing, not the host's; the abort errors the body.
+      if (_cancelled) {
+        await cancel();
+        if (_isClosed()) throw StateError('asset client is closed');
+        throw cancelledError;
+      }
+      _finish();
       if (_isClosed()) throw StateError('asset client is closed');
       throw networkError(_status, 'the body failed mid-transfer');
     }
-    _finished = true;
+    _finish();
     if (_isClosed()) throw StateError('asset client is closed');
     return null;
   }
@@ -237,7 +356,7 @@ final class BodyReader {
   /// Stops the transfer and releases the connection; safe to call twice.
   Future<void> cancel() async {
     if (_finished) return;
-    _finished = true;
+    _finish();
     _pending = null;
     try {
       // A StreamIterator that never moved has not subscribed, and cancelling
@@ -341,7 +460,16 @@ final class Requester {
   /// Sends one request and returns a usable answer; `403`/`404` is
   /// `not_found`, any other refusal `http`, no answer `network`.
   Future<Answer> send(String url, String path, RequestSpec spec) async {
+    final cancel = currentCancel();
+    if (cancel != null && cancel.isSet) throw cancelledError;
     final abort = Completer<void>();
+    // A cancelled download frees its connection, the body's too; the
+    // listener goes once the body is done, or with a request that failed.
+    final release =
+        cancel?.listen(() {
+          if (!abort.isCompleted) abort.complete();
+        }) ??
+        () {};
     final request = http.AbortableRequest(
       spec.method,
       Uri.parse(url),
@@ -365,8 +493,15 @@ final class Requester {
     try {
       // The abort frees the connection with a client that honours it; the
       // timeout bounds the wait with any client.
-      response = await sending.timeout(_timeout);
+      response = await _orCancelled(sending, cancel).timeout(_timeout);
+    } on _Cancelled {
+      release();
+      if (!abort.isCompleted) abort.complete();
+      sending.then((answer) => answer.stream.listen(null).cancel()).ignore();
+      if (_isClosed()) throw StateError('asset client is closed');
+      throw cancelledError;
     } on TimeoutException {
+      release();
       if (!abort.isCompleted) abort.complete();
       // A client that ignored the abort may still answer: release that
       // answer's connection when it comes.
@@ -381,8 +516,10 @@ final class Requester {
         detail: 'no response in time',
       );
     } on Object {
+      release();
       // Nothing of the transport's error crosses: it may name the URL.
       if (_isClosed()) throw StateError('asset client is closed');
+      if (cancel != null && cancel.isSet) throw cancelledError;
       _logger.warn('asset request failed', <String, Object?>{
         'kind': spec.kind.name,
         'path': loggablePath(path),
@@ -396,10 +533,22 @@ final class Requester {
       'status': status,
       'range': ?range,
     });
-    final body = BodyReader._(response.stream, status, _idle, _isClosed);
+    final body = BodyReader._(
+      response.stream,
+      status,
+      _idle,
+      _isClosed,
+      cancel,
+      release,
+    );
     if (_isClosed()) {
       await body.cancel();
       throw StateError('asset client is closed');
+    }
+    // Headers that won the race against a cancel are not reported.
+    if (cancel != null && cancel.isSet) {
+      await body.cancel();
+      throw cancelledError;
     }
     if (status == 403 || status == 404) {
       await body.cancel();
