@@ -12,12 +12,12 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_gamebase_client
-      ref: v0.1.0
+      ref: v0.2.0
   yingyeothon_auth_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_auth_client
-      ref: v0.1.0
+      ref: v0.2.0
 ```
 
 The siblings each one needs (`codec`, `logger`) are path dependencies inside the same

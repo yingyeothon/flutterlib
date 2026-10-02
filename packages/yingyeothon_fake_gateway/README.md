@@ -66,7 +66,7 @@ published and imports `dart:io`, so it cannot run on web — all but
 
 ```yaml
 dev_dependencies:
-  yingyeothon_fake_gateway: ^0.1.0   # workspace-resolved
+  yingyeothon_fake_gateway: ^0.2.0   # workspace-resolved
 ```
 
 ## Usage

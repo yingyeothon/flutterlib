@@ -1,6 +1,6 @@
 name: yingyeothon_asset_client
 description: Reader for yyt asset bundles on the CDN - a whole file, a JSON manifest, a byte range or a resumable download, decrypting and verifying yyt-enc v1 bundles.
-version: 0.1.0
+version: 0.2.0
 # Installed by git dependency; nothing is on pub.dev (rules/release.md).
 publish_to: none
 repository: https://github.com/yingyeothon/flutterlib

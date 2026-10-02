@@ -27,7 +27,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_codec
-      ref: v0.1.0
+      ref: v0.2.0
 ```
 
 ## Usage

@@ -32,7 +32,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_asset_client
-      ref: v0.1.0
+      ref: v0.2.0
 ```
 
 ## Usage
@@ -333,6 +333,19 @@ failure (resume instead), no key rotation.
 - `yingyeothon_asset_client_io.dart`: `downloadToFile` (`onProgress`, `noCache`,
   `expectedSize`, `expectedSha256`, `validate`, `discardOnLocalFailure`, `cancel`),
   and the core re-exported.
+
+## Changes since v0.1.0
+
+- **Breaking:** `AssetBundleClient.download` takes `Future<void>? cancel`. A class of
+  yours that `implements AssetBundleClient` (a test fake, say) must add the parameter;
+  a caller changes nothing.
+- New `AssetClientErrorCode`s, raised only when you opt in: `cancelled`,
+  `size_mismatch`, `digest_mismatch`, `asset_rejected`.
+- `downloadToFile` takes `expectedSize`, `expectedSha256`, `validate`,
+  `discardOnLocalFailure` and `cancel` (*Verified files* above). Without them it
+  behaves as before, except that a sidecar it cannot delete after a successful
+  rename no longer fails the call, and a sidecar that is not a plausible ETag is
+  discarded instead of sent as `If-Range`.
 
 ## Differences from @yingyeothon/asset-client and Yingyeothon.AssetClient
 

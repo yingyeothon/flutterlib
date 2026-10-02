@@ -1,6 +1,6 @@
 name: yingyeothon_logger
 description: Structured logger with a live severity threshold for the yyt client libraries. Context is a JSON object so any writer can render it.
-version: 0.1.0
+version: 0.2.0
 # Installed by git dependency; nothing is on pub.dev (rules/release.md).
 publish_to: none
 repository: https://github.com/yingyeothon/flutterlib

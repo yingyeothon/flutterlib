@@ -1,6 +1,6 @@
 name: yingyeothon_gamebase_client
 description: Client SDK for the yyt realtime gateway - lobby (positions, chat, parties) and dungeon (q) channels with reconnect, backoff and a peer map.
-version: 0.1.0
+version: 0.2.0
 # Installed by git dependency; nothing is on pub.dev (rules/release.md).
 publish_to: none
 repository: https://github.com/yingyeothon/flutterlib
