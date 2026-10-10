@@ -37,7 +37,31 @@
 - Releases are git tags and are the **user's** call — `release.md`.
 - `.claude/handover.md` is a **session note, not a rule**: where it and `rules/`
   disagree, `rules/` wins. Check its premise against `git log` before executing it; if
-  the premise is gone, say so and delete it.
+  the premise is gone, say so and delete it. Remaining work belongs in `todo/` (below),
+  so fold a handover's open items into it, then delete the handover.
+  On "continue the remaining work", `todo/index.md` comes first; a missing
+  `.claude/handover.md` is not a reason to stop.
+
+## Task tracker — `todo/`
+
+- `todo/` is git-ignored and machine-local. `todo/index.md` is the single entry point:
+  an ordered "Next up" list (one line per file with its first concrete step), the
+  session-start procedure, the base commit, and a "Waiting on user" list. A session
+  told only to continue the remaining work starts there.
+- One file per topic, `todo/<kebab-topic>.md`: why the work exists, what to read first
+  (`rules/`, docs, the `service` contract docs), the change classification, ordered
+  checkboxes with key paths, and done-criteria. The classification names the
+  verification level of the completion ritual's step 2 and whether the full review
+  applies. State and pointers only: facts, numbers and decisions go to `docs/` or
+  `rules/`, because `todo/` is never committed.
+- On session start: read the index, confirm the base commit, reconcile every commit
+  that landed since (then move the base commit to the newest one read), and work under
+  the completion ritual below. When `todo/` is absent (a fresh clone), say so and ask
+  the user rather than rebuilding it from guesses.
+- Tick an item when it is done. Delete a file when it is fully done and drop its line
+  from the index. Newly found work gets a new file and an index line.
+- No `TODO.md`-style files outside `todo/` and no scattered `TODO` comments; work cut
+  short mid-task also becomes a `todo/` item. Remaining work lives only in `todo/`.
 
 ## Per-task completion ritual
 
@@ -86,6 +110,8 @@
    ordering* if it touches the state machine, reconnect, the emitter or settlement;
    otherwise *editing and structure*.
 4. Fold durable lessons into `rules/*.md`; update `rules/index.md` if files changed.
+   Update `todo/`: tick what finished, delete a fully done file and its index line, add
+   a file for newly found work.
    Then send **the rule diff, with read-only access to the tree it describes,** to a
    fourth fresh reviewer with one question:
    *can an agent with no memory of this session follow this exactly, and what will it

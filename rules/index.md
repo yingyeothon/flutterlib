@@ -6,7 +6,7 @@ Open the file whose trigger matches the task. Each file is short; read it whole.
 | --- | --- |
 | [architecture.md](architecture.md) | adding or changing a package, a public type, a wire frame, the state machine, a transport seam |
 | [flutter.md](flutter.md) | anything a Flutter app or platform touches: web, background, lifecycle, `kDebugMode`, the example |
-| [workflow.md](workflow.md) | starting or finishing any task: branch policy, the completion ritual, the review, the green gate |
+| [workflow.md](workflow.md) | starting or finishing any task: branch policy, the completion ritual, the review, the green gate, the remaining-work tracker `todo/` |
 | [testing.md](testing.md) | writing or changing tests, doubles, coverage, the integration tag |
 | [manual-verification.md](manual-verification.md) | proving a change in a running build: the offline demo, the debug hooks, a real gateway |
 | [security.md](security.md) | the token, logging, the guards, hostnames, what this public repo may name |

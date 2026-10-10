@@ -39,6 +39,8 @@
 - Before non-trivial work, open `rules/index.md` and the relevant rule files.
 - Keep this file short; put reusable lessons in `rules/`.
   (`AGENTS.md` is a symlink to this file — edit `CLAUDE.md` only.)
+- Remaining work lives in the git-ignored `todo/`; on "continue the remaining work"
+  (`이어서 진행`) start from `todo/index.md` — `rules/workflow.md`.
 - After each completed task, fold any **durable** lesson into the relevant `rules/*.md`
   (and `rules/index.md` if files were added or removed). "Nothing durable" is an
   answer; say it.

@@ -40,6 +40,9 @@ GoogleService-Info.plist
 .envrc
 local/
 
+# Remaining-work tracker: machine-local, never committed (rules/workflow.md).
+/todo/
+
 # Claude Code: session notes stay local; only the shared guard config is tracked.
 .claude/*
 !.claude/settings.json
