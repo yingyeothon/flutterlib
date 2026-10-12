@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:yingyeothon_auth_client/yingyeothon_auth_client.dart';
@@ -10,6 +11,7 @@ import 'asset_screen.dart';
 import 'kv_screen.dart';
 import 'leaderboard_screen.dart';
 import 'lobby_screen.dart';
+import 'platform_screen.dart';
 import 'social_screen.dart';
 
 /// Config, sign-in, and the offline demo.
@@ -50,6 +52,12 @@ class _LoginScreenState extends State<LoginScreen> {
     _authChannel = TextEditingController(text: c.authChannelId);
     _kvBase = TextEditingController(text: c.kvBaseUrl);
     _assetBase = TextEditingController(text: c.assetBaseUrl);
+    if (kDebugMode &&
+        const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_PLATFORM')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pushNamed(PlatformScreen.route);
+      });
+    }
     if (offlineAutostart ||
         offlineAutostartKv ||
         offlineAutostartLb ||
@@ -364,6 +372,13 @@ class _LoginScreenState extends State<LoginScreen> {
             key: const Key('open-assets'),
             onPressed: _busy ? null : _openAssets,
             child: const Text('Asset bundle'),
+          ),
+          FilledButton.tonal(
+            key: const Key('open-platform'),
+            onPressed: _busy
+                ? null
+                : () => Navigator.of(context).pushNamed(PlatformScreen.route),
+            child: const Text('Match and push'),
           ),
           // No sign-in: the one state route that belongs to nobody.
           FilledButton.tonal(

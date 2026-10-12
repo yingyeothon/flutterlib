@@ -317,3 +317,18 @@ Files: `lib/src/internal/client_impl.dart` (`download`, `_OuterSink`, `_restarti
 - The workspace resolves sibling packages to source, so `dart test --coverage-path`
   in one package reports lines of its siblings too. `check_coverage` keeps only the
   package's own `lib/`.
+
+## Match and push
+
+- Match is not a lobby handshake: the socket queues immediately, has no hello,
+  and ends on a terminal message. Shared live/deferred results retain members
+  and unknown fields. Match HTTP polling belongs to the kit, not the wire client.
+- Presence and deferred match share a bounded, abortable requester in
+  `gamebase_client`; push has the equivalent requester in its own package.
+  Change their deadline, redirect, credential and diagnostic handling together.
+  Authenticated requests never follow redirects.
+- Push adapter failures are sanitized; asynchronous refresh errors are events.
+  Invalidate startup and queued refresh generations synchronously when sign-out
+  begins, before waiting for the registration lane; canceling the listener only
+  inside that lane permits a refresh to queue behind DELETE. Topics are public and
+  copied verbatim from kit-config, never inferred from a channel name.

@@ -152,11 +152,14 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
 
 ## Scope decisions already made
 
-- Ten packages (`kvstore_client` was added as the seventh and `asset_client` as the
-  eighth by owner decision: the service's `docs/asset-encryption.md` specifies an
-  `asset-client` for tslib, csharplib and flutterlib; `leaderboard_client` and
-  `social_client` as the ninth and tenth by owner decision on 2026-10-01), no more
-  without a reason that survives "can this run on a phone?".
+- Twelve packages approved by the owner on 2026-10-12: the existing ten plus
+  `push_client` (Android device registration with injected platform glue) and
+  `game_kit` (purpose-shaped composition for mobile games). Match and presence
+  wire APIs live in `gamebase_client`; time, LB and Social reuse their clients.
+  No additional platform package is needed. The current workspace has the
+  original ten and push; game_kit is approved as the twelfth. Update the root
+  README and workspace together when adding it. Further packages need an owner
+  decision and a reason that survives "can this run on a phone?".
 - The gateway wire protocol is owned by the `service` repository. When it changes,
   this SDK follows it — never the other way round.
 - The example is one app (`playground`) that exercises every package; a second

@@ -59,6 +59,7 @@ handle it.
 | [yingyeothon_leaderboard_client](packages/yingyeothon_leaderboard_client) | Client for yyt leaderboards: a board by name, `submit`, a ranked `top` page, your own `score` and rank, the server's deletes |
 | [yingyeothon_social_client](packages/yingyeothon_social_client) | Client for yyt social: a player's card, requests, friends and blocks, and the server key's reads and deletes |
 | [yingyeothon_asset_client](packages/yingyeothon_asset_client) | Reader for asset bundles on the CDN: whole files, JSON, ranges, resumable downloads; decrypts and verifies `yyt-enc v1` |
+| [yingyeothon_push_client](packages/yingyeothon_push_client) | Android/FCM registration and incoming messages through an injected device adapter |
 | [yingyeothon_fake_gateway](packages/yingyeothon_fake_gateway) | In-process gateway for tests and the offline demo; never published |
 
 The arrows are the `dependencies:` each pubspec declares; `event_broker` stands alone.
@@ -77,6 +78,8 @@ graph LR
   yingyeothon_social_client --> yingyeothon_logger
   yingyeothon_asset_client --> yingyeothon_codec
   yingyeothon_asset_client --> yingyeothon_logger
+  yingyeothon_push_client --> yingyeothon_codec
+  yingyeothon_push_client --> yingyeothon_logger
   yingyeothon_fake_gateway --> yingyeothon_codec
 ```
 

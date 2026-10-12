@@ -108,6 +108,11 @@ still counts toward `4003`.
 
 ## Public API
 
+- `LiveMatchClient`, `LiveMatchClientOptions`, `DeferredMatchClient`,
+  `DeferredMatchClientOptions`, `MatchMember`, `MatchResult`, `MatchTicket`,
+  `MatchException` (safe status/code/reason and cooldown `retryAfter`).
+- `GatewayPresenceClient`, `GatewayPresenceClientOptions`, `GatewayPresence`.
+
 - Clients and options: `GatewayLobbyClient`, `GatewayLobbyClientOptions`,
   `PartyCommands`, `GatewayGameClient`, `GatewayGameClientOptions`,
   `GatewayClientOptions`.
@@ -161,3 +166,15 @@ still counts toward `4003`.
 - A local refusal is a `GatewayClientException` whose code names the gateway refusal
   it mirrors; both originals throw a generic error with the code in the message text,
   indistinguishable from "not connected".
+
+## Match and presence
+
+`LiveMatchClient` speaks the match socket, independently of lobby and dungeon.
+`find()` submits on connection; a terminal result closes the socket. Repeated
+calls share the pending find, and `cancel()` allows another find. Deferred
+`submit`, `status`, `cancel`, `accept` and `decline` map the ticket routes.
+`status()` returns null on 404. Both modes use `MatchResult`, retaining unknown
+fields and ordered `members`. Polling/retry policy belongs to the game kit.
+
+`GatewayPresenceClient.users` queries up to 50 player ids without opening a
+lobby socket. Presence is a hint and is not block-aware.

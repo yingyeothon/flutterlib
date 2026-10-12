@@ -163,3 +163,14 @@ lib/
   widgets/             zone map painter, chat, party panel, banners, log panel
 test/                  widget tests against the fake gateway
 ```
+
+## Match and push
+
+The Match and push screen has a debug offline check for both match modes and
+push registration. `YYT_OFFLINE_AUTOSTART_PLATFORM=true` opens and runs it.
+Android FCM uses build defines `YYT_PUSH_API_BASE`, `YYT_PUSH_CHANNEL_ID`,
+`YYT_PUSH_TOPIC` from kit-config and `YYT_FIREBASE_API_KEY`,
+`YYT_FIREBASE_APP_ID`, `YYT_FIREBASE_SENDER_ID`, `YYT_FIREBASE_PROJECT_ID`
+from the app's Firebase configuration. Use an untracked dart-define-from-file
+file; never commit its values. Topic messages are public. iOS is unsupported.
+Real-device receipt must be checked before claiming FCM verification.

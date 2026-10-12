@@ -24,6 +24,19 @@ export 'src/game_client.dart' show GatewayGameClient, GatewayGameClientOptions;
 export 'src/gateway_url.dart' show buildGatewayUrl;
 export 'src/lobby_client.dart'
     show GatewayLobbyClient, GatewayLobbyClientOptions, PartyCommands;
+export 'src/match_client.dart'
+    show
+        MatchMember,
+        MatchResult,
+        MatchTicket,
+        MatchException,
+        LiveMatchClientOptions,
+        LiveMatchClient,
+        DeferredMatchClientOptions,
+        DeferredMatchClient,
+        GatewayPresence,
+        GatewayPresenceClientOptions,
+        GatewayPresenceClient;
 export 'src/protocol/capabilities.dart' show Capabilities;
 export 'src/protocol/close_codes.dart'
     show

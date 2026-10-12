@@ -9,6 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
+  yingyeothon_push_client:
+    path: ../../packages/yingyeothon_push_client
   url_launcher: ^6.3.0
   yingyeothon_asset_client:
     path: ../../packages/yingyeothon_asset_client

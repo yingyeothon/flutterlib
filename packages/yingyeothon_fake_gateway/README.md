@@ -132,6 +132,8 @@ ignores `Cache-Control`, and cannot replace a file while it runs.
 
 ## Public API
 
+- `FakeMatchStore`, `FakeMatchRefusal`, `FakeMatchServer`, `FakePushStore`.
+
 - `FakeGateway` (`start`, `wsUrl`, `mapUrl`, `kvUrl`, `kv`, `lb`, `social`, `assetsUrl`, `port`,
   `lobbyUsers`,
   `gameMembers`, `received`, `closeUser`, `sendRaw`, `sendBinary`,
@@ -188,3 +190,17 @@ ignores `Cache-Control`, and cannot replace a file while it runs.
   the service's route comment says (its docs still name `team`/`team` only); the
   deployed route code also refuses a player on any collection without a `project`
   scope (`user`/`user` included), which reads as a service defect and is not copied.
+
+## Match, push and presence fakes
+
+`FakeMatchServer.start` binds a separate loopback listener for live sockets and
+HTTP tickets. Its `store(channel)` uses `FakeMatchStore` with an injectable epoch
+seconds clock. `tick()` applies waiting and proposal deadlines. It models full
+FIFO proposals, acceptance, decline, cooldown and injected callback failures.
+It omits Redis confirming races, worker scheduling, partial matching, throttling,
+channel metadata and cryptographic auth; tests script those wire errors separately.
+
+`FakeGateway.push` exposes device token registration and its own HTTP token
+routes; registrations are in memory. The gateway also serves authenticated
+`/presence`, without its real address bucket or channel expiry. Push registrations are isolated by channel and caller.
+No Firebase message is sent. Tests inject incoming messages at the adapter seam.

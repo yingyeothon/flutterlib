@@ -7,6 +7,7 @@ import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 import 'fake_assets.dart';
 import 'fake_kv.dart';
 import 'fake_leaderboard.dart';
+import 'fake_push.dart';
 import 'fake_social.dart';
 
 /// A `q` connection as the game-side hook sees it.
@@ -193,6 +194,9 @@ abstract interface class FakeGateway {
   /// Delivers what [holdOutbound] kept, in order, and stops holding.
   void releaseOutbound(String userId);
 
+  /// Device token registrations for the offline push demo.
+  FakePushStore get push;
+
   /// Closes every socket and the listener.
   Future<void> shutdown();
 }
@@ -337,6 +341,8 @@ final class _FakeGateway implements FakeGateway {
   @override
   final FakeSocialStore social;
   final FakeAssetStore _assets;
+  @override
+  final FakePushStore push = FakePushStore();
   late final Timer _flush;
   final Map<String, _LobbyConnection> _lobby = <String, _LobbyConnection>{};
   final Map<String, _Peer> _peers = <String, _Peer>{};
@@ -455,6 +461,47 @@ final class _FakeGateway implements FakeGateway {
       }
       if (request.uri.path == '/livez') {
         request.response.write('ok');
+        await request.response.close();
+        return;
+      }
+      if (FakePushStore.handles(request.uri.path)) {
+        await push.handle(request);
+        return;
+      }
+      if (request.uri.path == '/presence') {
+        final auth = request.headers.value('authorization');
+        final channel = request.uri.queryParameters['channel'];
+        final ids = request.uri.queryParameters['users']?.split(',').toSet();
+        if (auth == null ||
+            !auth.startsWith('Bearer ') ||
+            auth.length <= 7 ||
+            (_options.acceptedTokens != null &&
+                !_options.acceptedTokens!.contains(auth.substring(7)))) {
+          await _reject(request, 401);
+          return;
+        }
+        if (channel == null ||
+            ids == null ||
+            ids.length > 50 ||
+            ids.any((id) => !RegExp(r'^[a-f0-9]{32}$').hasMatch(id))) {
+          await _reject(request, 400);
+          return;
+        }
+        if (_options.channels != null &&
+            !_options.channels!.contains(channel)) {
+          await _reject(request, 404);
+          return;
+        }
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          Json.encode({
+            'type': 'presence',
+            'users': [
+              for (final id in ids)
+                {'userId': id, 'online': _lobby.containsKey(id)},
+            ],
+          }),
+        );
         await request.response.close();
         return;
       }

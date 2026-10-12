@@ -1,0 +1,19 @@
+name: yingyeothon_push_client
+description: Injectable Android push registration and message routing for yyt.
+version: 0.2.0
+publish_to: none
+repository: https://github.com/yingyeothon/flutterlib
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dependencies:
+  http: ^1.6.0
+  yingyeothon_codec:
+    path: ../yingyeothon_codec
+  yingyeothon_logger:
+    path: ../yingyeothon_logger
+dev_dependencies:
+  test: ^1.31.0
+  fake_async: ^1.3.3
+  yingyeothon_fake_gateway:
+    path: ../yingyeothon_fake_gateway

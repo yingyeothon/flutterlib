@@ -6,6 +6,7 @@ import 'screens/kv_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/lobby_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/platform_screen.dart';
 import 'screens/social_screen.dart';
 import 'session.dart';
 
@@ -28,6 +29,7 @@ class PlaygroundApp extends StatelessWidget {
       KvScreen.route: (_) => KvScreen(session: session),
       LeaderboardScreen.route: (_) => LeaderboardScreen(session: session),
       SocialScreen.route: (_) => SocialScreen(session: session),
+      PlatformScreen.route: (_) => PlatformScreen(session: session),
       AssetScreen.route: (_) => AssetScreen(session: session),
     },
   );

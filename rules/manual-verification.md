@@ -70,9 +70,17 @@ package:
 | Abort (4001) / Finish (1000) | closes your `q` socket with that code (dungeon screen) |
 | Log panel | the SDK's logger at `debug`, rendered in the app |
 | `--dart-define=YYT_OFFLINE_AUTOSTART=true` | on launch: offline demo, enter the lobby, seed the peers — no input needed |
+| `--dart-define=YYT_OFFLINE_AUTOSTART_PLATFORM=true` | on launch: live and deferred two-player matching, push register, classify wake and unregister; no Firebase needed |
 | `--dart-define=YYT_OFFLINE_AUTOSTART_KV=true` | on launch: offline demo, open the key-value screen, save one settings record |
 | `--dart-define=YYT_OFFLINE_AUTOSTART_LB=true` | on launch: offline demo, open the leaderboard screen, submit one score |
 | `--dart-define=YYT_OFFLINE_AUTOSTART_SOCIAL=true` | on launch: offline demo, open the friends screen, set a card, ask the first seeded card's owner |
+
+The platform autostart passes only when stdout records all three lines:
+`Live match: 2 members`, `Deferred match: confirmed`, and
+`Push: 1 registered, wake true, 0 after sign-out`. A `Platform check failed`
+line, missing output or a timeout before these lines is unverified: diagnose the
+Linux launch below and record `Not run: offline platform check — <reason>`.
+This proves only the fake flows; real Android FCM receipt is a separate check.
 
 Without a UI driver (an agent, a headless box), build with the autostart define,
 launch the binary, and read the log panel or stdout; that is how the ritual's "a

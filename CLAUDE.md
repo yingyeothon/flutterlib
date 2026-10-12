@@ -7,12 +7,9 @@
   [csharplib](https://github.com/yingyeothon/csharplib): `packages/yingyeothon_*` are
   pure Dart (no Flutter import) so `dart test` covers them, and `examples/playground`
   is the Flutter app that shows them wired together.
-- Ten packages in one pub workspace: `codec`, `logger`, `event_broker`,
-  `gamebase_client` (the gateway SDK), `auth_client`, `kvstore_client` (the key-value
-  store client), `leaderboard_client` (the `/lb/*` client), `social_client` (the
-  `/social/*` client), `asset_client` (the CDN asset-bundle reader), and
-  `fake_gateway` (an in-process gateway, `/kv/*` store, `/lb/*` boards, `/social/*`
-  graph and `/assets/*` CDN for tests and the offline demo; never published).
+- Packages share one pub workspace; the root README owns the package list and
+  dependency graph. `fake_gateway` is test/demo infrastructure, never published.
+  Package additions follow the owner decisions in `rules/workflow.md`.
 - Source of truth documents:
   - `CONVENTIONS.md` — Dart API design rules. Canonical; do not restate or contradict.
   - `README.md` — what the library is for, the package list and the dependency graph.
