@@ -156,9 +156,8 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
   `push_client` (Android device registration with injected platform glue) and
   `game_kit` (purpose-shaped composition for mobile games). Match and presence
   wire APIs live in `gamebase_client`; time, LB and Social reuse their clients.
-  No additional platform package is needed. The current workspace has the
-  original ten and push; game_kit is approved as the twelfth. Update the root
-  README and workspace together when adding it. Further packages need an owner
+  No additional platform package is needed. The workspace now contains all
+  twelve; the root README owns the list and dependency graph. Further packages need an owner
   decision and a reason that survives "can this run on a phone?".
 - The gateway wire protocol is owned by the `service` repository. When it changes,
   this SDK follows it — never the other way round.

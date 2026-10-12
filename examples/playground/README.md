@@ -174,3 +174,13 @@ Android FCM uses build defines `YYT_PUSH_API_BASE`, `YYT_PUSH_CHANNEL_ID`,
 from the app's Firebase configuration. Use an untracked dart-define-from-file
 file; never commit its values. Topic messages are public. iOS is unsupported.
 Real-device receipt must be checked before claiming FCM verification.
+
+## Game kit
+
+The Game kit screen runs all waves offline or accepts the public kit-config JSON
+and the signed-in credential. `YYT_OFFLINE_AUTOSTART_GAME_KIT=true` opens the
+screen and runs its fake scenarios. `YYT_KIT_CONFIG` can supply the public JSON
+as a string through an untracked build-defines file. `YYT_MATCH_CALLBACK=true`
+is explicit for a live callback channel. Firebase uses the same Android build
+defines as the Match and push screen. No secure-store/offline queue adapter is
+silently enabled in this example; games inject their platform implementation.

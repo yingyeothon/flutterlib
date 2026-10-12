@@ -77,3 +77,5 @@ The gateway's wire protocol, the auth service's endpoints, the key-value store, 
 leaderboards, the social graph, the asset CDN with its encryption format, and the console are owned by
 [yingyeothon/service](https://github.com/yingyeothon/service). This guide cites them;
 when the two disagree, `service` is right and this SDK follows.
+
+- [Build a game with one kit](game-kit.md) — purpose-shaped modules and lifecycle.

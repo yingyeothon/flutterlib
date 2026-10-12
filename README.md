@@ -43,6 +43,7 @@ handle it.
 | [Asset bundles](docs/assets.md) | game files from the CDN, encrypted or not: a manifest, a range, a resumable download |
 | [Connection lifecycle](docs/connection-lifecycle.md) | states, events, reconnect, backoff |
 | [Errors](docs/errors.md) / [Troubleshooting](docs/troubleshooting.md) | every refusal, close code and symptom |
+| [Game kit](docs/game-kit.md) | one session and purpose-shaped game modules |
 | [Flutter](docs/flutter.md) | platforms, background, debug hooks, desktop verification |
 | [Examples](examples/README.md) | the playground app: offline demo, no credential needed |
 
@@ -59,6 +60,7 @@ handle it.
 | [yingyeothon_leaderboard_client](packages/yingyeothon_leaderboard_client) | Client for yyt leaderboards: a board by name, `submit`, a ranked `top` page, your own `score` and rank, the server's deletes |
 | [yingyeothon_social_client](packages/yingyeothon_social_client) | Client for yyt social: a player's card, requests, friends and blocks, and the server key's reads and deletes |
 | [yingyeothon_asset_client](packages/yingyeothon_asset_client) | Reader for asset bundles on the CDN: whole files, JSON, ranges, resumable downloads; decrypts and verifies `yyt-enc v1` |
+| [yingyeothon_game_kit](packages/yingyeothon_game_kit) | Purpose-shaped session, content, save, room, turns, board, mail, friends, matchmaking and push |
 | [yingyeothon_push_client](packages/yingyeothon_push_client) | Android/FCM registration and incoming messages through an injected device adapter |
 | [yingyeothon_fake_gateway](packages/yingyeothon_fake_gateway) | In-process gateway for tests and the offline demo; never published |
 
@@ -70,6 +72,7 @@ graph LR
   yingyeothon_gamebase_client --> yingyeothon_logger
   yingyeothon_logger --> yingyeothon_codec
   yingyeothon_auth_client --> yingyeothon_codec
+  yingyeothon_auth_client --> yingyeothon_logger
   yingyeothon_kvstore_client --> yingyeothon_codec
   yingyeothon_kvstore_client --> yingyeothon_logger
   yingyeothon_leaderboard_client --> yingyeothon_codec
@@ -78,6 +81,14 @@ graph LR
   yingyeothon_social_client --> yingyeothon_logger
   yingyeothon_asset_client --> yingyeothon_codec
   yingyeothon_asset_client --> yingyeothon_logger
+  yingyeothon_game_kit --> yingyeothon_auth_client
+  yingyeothon_game_kit --> yingyeothon_codec
+  yingyeothon_game_kit --> yingyeothon_gamebase_client
+  yingyeothon_game_kit --> yingyeothon_kvstore_client
+  yingyeothon_game_kit --> yingyeothon_leaderboard_client
+  yingyeothon_game_kit --> yingyeothon_logger
+  yingyeothon_game_kit --> yingyeothon_push_client
+  yingyeothon_game_kit --> yingyeothon_social_client
   yingyeothon_push_client --> yingyeothon_codec
   yingyeothon_push_client --> yingyeothon_logger
   yingyeothon_fake_gateway --> yingyeothon_codec

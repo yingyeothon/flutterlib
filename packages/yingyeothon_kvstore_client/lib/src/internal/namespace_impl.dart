@@ -117,6 +117,14 @@ class KvNamespaceImpl implements KvNamespace {
 
   @override
   Future<void> delete(String key, {int? ifMatch}) async {
+    await _delete(key, ifMatch: ifMatch);
+  }
+
+  @override
+  Future<bool> deleteIfVersion(String key, {required int version}) =>
+      _delete(key, ifMatch: version);
+
+  Future<bool> _delete(String key, {int? ifMatch}) async {
     final path = KvPaths.entry(ref, ownerId, key);
     try {
       await requester.send(
@@ -126,12 +134,10 @@ class KvNamespaceImpl implements KvNamespace {
         headers: _conditions(ifMatch: ifMatch),
       );
     } on KvStoreException catch (e) {
-      // A reader is told 404 for a key that was not there; a write-only
-      // caller gets 204 either way. Neither is an error to the caller of
-      // `delete`, so both read as done.
-      if (e.status == 404) return;
+      if (e.status == 404) return false;
       rethrow;
     }
+    return true;
   }
 
   @override

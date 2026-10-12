@@ -332,3 +332,41 @@ Files: `lib/src/internal/client_impl.dart` (`download`, `_OuterSink`, `_restarti
   begins, before waiting for the registration lane; canceling the listener only
   inside that lane permits a refresh to queue behind DELETE. Topics are public and
   copied verbatim from kit-config, never inferred from a channel name.
+
+## Game kit
+
+- `service/docs/game-kit-design.md`, including its Wave A interoperability
+  contract, owns envelope, hash, log recovery and queue semantics. Dart adapts
+  the API idiom, never the wire. Checked against service `bcbd079` and its route
+  sources on 2026-10-12; sibling implementations are references, not the spec.
+- Snapshot turn records, count, chain hash and terminal result together before
+  asynchronous persistence/replay sends. A turn arriving during those awaits
+  leaves the newer log dirty. An older valid persisted prefix is stale cache,
+  not divergence; retain the current state and request the peer log.
+- A replay responder is the host or first eligible online player, never an
+  arbitrary member/spectator. Delegated finish binds responder, request id,
+  game id, terminal count and chain hash, during assembly and after completion.
+- Natural socket reconnect triggers both room state and turn recovery. Calls
+  racing around an awaited connection share one assembly. Receive boundaries
+  sanitize invalid peer JSON and turn corruption freezes with mismatch.
+- Retry waits release the deferred HTTP lane. Cancel/pause invalidate operation
+  epochs before waiting for that lane. Stale 401s never sign out a replacement
+  identity; guard generation on the error path as on the success path.
+- Buffer live invitations before awaiting matched, then accept only matched
+  senders in the formation window. An old find's cleanup only owns its captured
+  subscriptions, not a replacement identity's matching flow.
+- A conditional mail claim needs `KvNamespace.deleteIfVersion`: ordinary delete
+  folds 404 into success and makes two successful claims possible. Return the
+  letter only after an observed-version delete reports true.
+- An acknowledged leaderboard write is successful even if rank hydration fails;
+  nullable rank plus a refused event keeps sum-board finish retries from writing
+  the score again. Unknown transport write outcomes still need game/server
+  reconciliation; there is no leaderboard idempotency key in the wire API.
+- Restore a matching own-player result/board receipt before advertising a recovered
+  game or serving its replay. Release the replay gate once local chain and receipt
+  initialization finishes, before waiting for peer recovery; retain host requests
+  received during recovery and answer them afterwards. Consult
+  the receipt before result sinks so a repeated finish cannot repeat an acknowledged
+  sum submission after reconstructing the game object. Keep in-memory board
+  acknowledgement separate from a durable result receipt: an old receipt must
+  neither revoke a successful board write nor mark its failed receipt PUT complete.

@@ -545,6 +545,33 @@ void main() {
     });
   });
 
+  test(
+    'conditional deletion distinguishes an absent claim from success',
+    () async {
+      fake.answer(204);
+      expect(
+        await client.collection('c').deleteIfVersion('k', version: 2),
+        true,
+      );
+      expect(fake.requests.last.headers['if-match'], '"2"');
+      fake.answer(404);
+      expect(
+        await client.collection('c').deleteIfVersion('k', version: 2),
+        false,
+      );
+      fake.answer(409, '{"error":{"code":"conflict","details":{"current":3}}}');
+      expect(
+        (await refused(
+          () => client.collection('c').deleteIfVersion('k', version: 2),
+        )).currentVersion,
+        3,
+      );
+      expect(
+        () => client.collection('c').deleteIfVersion('k', version: 0),
+        throwsArgumentError,
+      );
+    },
+  );
   group('delete', () {
     test('204 for a present or an absent key; if-match optional', () async {
       fake.answer(204, '');

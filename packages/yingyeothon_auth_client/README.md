@@ -77,6 +77,11 @@ quote the credential back, so the status is the whole report.
 
 ## Public API
 
+- `AuthSession`, `AuthSessionOptions`, `AuthTokenStorage`, `AuthSessionException`.
+  Session commands are `signIn`, `fromToken`, `restore`, `signOut`, `synchronize`
+  and `close`; events are `changed`, `expiring` and `signedOut`. `now()` is epoch
+  milliseconds, `expiresAt` epoch seconds.
+
 - `AuthClient` (`fetchConfig`, `buildStartUrl`, `parseRedirect`, `exchange`, `verify`,
   `newNonce`).
 - `AuthChannelConfig`, `ChannelToken`, `AuthFailure`, `AuthFailureKind`.
@@ -95,3 +100,15 @@ quote the credential back, so the status is the whole report.
   wire data. `AuthChannelConfig.expiresAt` is Unix seconds in both, so mind the name.
 - The nonce rides in the redirect's query string; the auth service matches the
   allowlist on origin and path prefix, so a query is admitted.
+
+## Session lifetime and platform time
+
+`AuthSession` adds an engine-free session around host-provided login, server
+clock and optional secure storage. See the [game kit guide](../../docs/game-kit.md).
+`fromToken` reads claims without verifying the signature; every service request
+is still authenticated by the service. A failed initial clock synchronization
+keeps the in-memory identity but `now()` refuses `unavailable`, never wall time.
+Storage failure rolls back adoption, and stale login/clock work cannot replace a
+newer identity. A reentrant sign-out cannot persist its discarded token.
+`close` cancels timers while preserving storage; `signOut` clears both identity
+and storage. Inject mobile secure storage in the host; shared web storage is off.

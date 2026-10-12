@@ -1,0 +1,32 @@
+name: yingyeothon_game_kit
+description: Purpose-shaped session, save, room and game modules for yyt.
+version: 0.2.0
+publish_to: none
+repository: https://github.com/yingyeothon/flutterlib
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dependencies:
+  http: ^1.6.0
+  crypto: ^3.0.6
+  yingyeothon_auth_client:
+    path: ../yingyeothon_auth_client
+  yingyeothon_codec:
+    path: ../yingyeothon_codec
+  yingyeothon_gamebase_client:
+    path: ../yingyeothon_gamebase_client
+  yingyeothon_kvstore_client:
+    path: ../yingyeothon_kvstore_client
+  yingyeothon_leaderboard_client:
+    path: ../yingyeothon_leaderboard_client
+  yingyeothon_logger:
+    path: ../yingyeothon_logger
+  yingyeothon_push_client:
+    path: ../yingyeothon_push_client
+  yingyeothon_social_client:
+    path: ../yingyeothon_social_client
+dev_dependencies:
+  test: ^1.31.0
+  fake_async: ^1.3.3
+  yingyeothon_fake_gateway:
+    path: ../yingyeothon_fake_gateway

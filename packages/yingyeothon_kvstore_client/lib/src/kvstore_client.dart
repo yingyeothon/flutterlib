@@ -129,6 +129,12 @@ abstract interface class KvNamespace {
   /// [ifMatch] is also a `404`, folded the same way.
   Future<void> delete(String key, {int? ifMatch});
 
+  /// Deletes only the version observed by a reader. Returns false on 404
+  /// (absent key or collection), true on successful deletion, and throws a
+  /// version conflict on 409. Unlike [delete], this preserves an absent result
+  /// so competing inbox claimants cannot both report success.
+  Future<bool> deleteIfVersion(String key, {required int version});
+
   /// One page of keys, optionally with values. [limit] is 1 … 100 (server
   /// default 50); [cursor] is the previous page's `nextCursor`.
   Future<KvPage> list({

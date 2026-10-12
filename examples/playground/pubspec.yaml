@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
+  yingyeothon_game_kit:
+    path: ../../packages/yingyeothon_game_kit
   yingyeothon_push_client:
     path: ../../packages/yingyeothon_push_client
   url_launcher: ^6.3.0

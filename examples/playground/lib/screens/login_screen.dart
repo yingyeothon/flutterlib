@@ -8,6 +8,7 @@ import '../debug/debug_hooks.dart';
 import '../session.dart';
 import '../widgets/log_panel.dart';
 import 'asset_screen.dart';
+import 'game_kit_screen.dart';
 import 'kv_screen.dart';
 import 'leaderboard_screen.dart';
 import 'lobby_screen.dart';
@@ -52,6 +53,12 @@ class _LoginScreenState extends State<LoginScreen> {
     _authChannel = TextEditingController(text: c.authChannelId);
     _kvBase = TextEditingController(text: c.kvBaseUrl);
     _assetBase = TextEditingController(text: c.assetBaseUrl);
+    if (kDebugMode &&
+        const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_GAME_KIT')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pushNamed(GameKitScreen.route);
+      });
+    }
     if (kDebugMode &&
         const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_PLATFORM')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -379,6 +386,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ? null
                 : () => Navigator.of(context).pushNamed(PlatformScreen.route),
             child: const Text('Match and push'),
+          ),
+          FilledButton.tonal(
+            key: const Key('open-game-kit'),
+            onPressed: _busy
+                ? null
+                : () => Navigator.of(context).pushNamed(GameKitScreen.route),
+            child: const Text('Game kit'),
           ),
           // No sign-in: the one state route that belongs to nobody.
           FilledButton.tonal(

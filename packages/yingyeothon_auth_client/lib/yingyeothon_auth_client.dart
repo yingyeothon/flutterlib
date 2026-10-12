@@ -18,3 +18,10 @@ export 'src/auth_client.dart'
         AuthFailure,
         AuthFailureKind,
         ChannelToken;
+
+export 'src/auth_session.dart'
+    show
+        AuthTokenStorage,
+        AuthSessionException,
+        AuthSessionOptions,
+        AuthSession;

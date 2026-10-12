@@ -174,3 +174,12 @@ a connection failure; `malformed_response` (with the answer's status) is a body 
 No collection administration (the console and `yyt kv` create collections), no cache
 (every response is `Cache-Control: no-store`), no retry, no token refresh (a new token
 is a new client), and no encryption (the server does it; `encrypted` is metadata).
+
+## Reader-only conditional deletion
+
+`deleteIfVersion(key, version: observed)` returns true on successful deletion,
+false on 404, and throws a version conflict on 409. This preserves the absence
+that `delete` intentionally folds into success, so competing mail claims can
+report exactly one winner. It requires a reader's version; writes without read
+rights cannot use a condition. This adds a member to `KvNamespace`; consumers
+implementing that interface need to implement it when upgrading.
