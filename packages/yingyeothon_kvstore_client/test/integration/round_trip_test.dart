@@ -110,6 +110,16 @@ Future<void> walkTheTwoCases(
   expect(page.entries.map((e) => e.key), contains(key));
   final counter = await soon(mine.incr('$key-hits', 2));
   expect(counter.value, 2);
+  await expectLater(
+    soon(mine.incr('$key-hits', -3, min: 0)),
+    throwsA(
+      isA<KvStoreException>()
+          .having((e) => e.isOutOfRange, 'out of range', true)
+          .having((e) => e.currentValue, 'stored counter', 2)
+          .having((e) => e.currentVersion, 'version', null),
+    ),
+  );
+  expect((await soon(mine.getEntry('$key-hits')))!.value, 2);
   await soon(mine.delete(key, ifMatch: updated.version));
   await soon(mine.delete('$key-hits'));
   expect(await soon(mine.getEntry(key)), isNull);

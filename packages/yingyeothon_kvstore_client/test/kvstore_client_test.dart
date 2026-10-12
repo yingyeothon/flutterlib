@@ -41,6 +41,40 @@ Future<KvStoreException> refused(Future<Object?> Function() body) async {
 }
 
 void main() {
+  test('out-of-range values are typed and never treated as versions', () {
+    // service/services/state/src/kvstore.ts: patchEntry AppError for incr bounds.
+    for (final value in ['null', '"7"', '{}', '1.5']) {
+      final error = KvStoreException.fromResponse(
+        409,
+        '{"error":{"code":"conflict","details":{"reason":"out_of_range","value":$value}}}',
+      );
+      expect(error.currentValue, isNull);
+    }
+    for (final value in [-7, 0, 7]) {
+      final body =
+          '{"error":{"code":"conflict","details":{"reason":"out_of_range","value":$value}}}';
+      final error = KvStoreException.fromResponse(409, body);
+      expect(error.currentValue, value);
+      expect(error.currentVersion, isNull);
+      expect(error.toString(), 'KvStoreException(conflict, 409)');
+      expect(KvStoreException.fromResponse(400, body).currentValue, isNull);
+    }
+    expect(
+      KvStoreException.fromResponse(
+        409,
+        '{"error":{"code":"conflict","details":{"reason":"exists","value":7}}}',
+      ).currentValue,
+      isNull,
+    );
+    expect(
+      KvStoreException.fromResponse(
+        409,
+        '{"error":{"code":"conflict","details":{"reason":"out_of_range"}}}',
+      ).currentValue,
+      isNull,
+    );
+  });
+
   late FakeHttp fake;
   late CapturingLogWriter log;
   late KvStoreClient client;
@@ -769,47 +803,51 @@ void main() {
       },
     );
 
-    test('incr sends min and max; out_of_range carries no value', () async {
-      fake.answer(200, '{"value":3,"version":2}');
-      await client.collection('c').incr('lives', -1, min: 0, max: 5);
-      expect(fake.requests.last.body, '{"incr":-1,"min":0,"max":5}');
-      expect(
-        fake.requests.last.headers['authorization'],
-        'Bearer $fixtureToken',
-      );
-      fake.answer(200, '{"value":3,"version":3}');
-      await client.collection('c').incr('lives', 1, max: 3);
-      expect(fake.requests.last.body, '{"incr":1,"max":3}');
-      fake.answer(200, '{"value":3,"version":4}');
-      await client.collection('c').incr('lives', 0, min: 3, max: 3);
-      expect(fake.requests.last.body, '{"incr":0,"min":3,"max":3}');
+    test(
+      'incr sends min and max; out_of_range carries the stored counter',
+      () async {
+        fake.answer(200, '{"value":3,"version":2}');
+        await client.collection('c').incr('lives', -1, min: 0, max: 5);
+        expect(fake.requests.last.body, '{"incr":-1,"min":0,"max":5}');
+        expect(
+          fake.requests.last.headers['authorization'],
+          'Bearer $fixtureToken',
+        );
+        fake.answer(200, '{"value":3,"version":3}');
+        await client.collection('c').incr('lives', 1, max: 3);
+        expect(fake.requests.last.body, '{"incr":1,"max":3}');
+        fake.answer(200, '{"value":3,"version":4}');
+        await client.collection('c').incr('lives', 0, min: 3, max: 3);
+        expect(fake.requests.last.body, '{"incr":0,"min":3,"max":3}');
 
-      fake.answer(
-        409,
-        '{"error":{"code":"conflict","message":"x",'
-        '"details":{"reason":"out_of_range","value":987654}}}',
-      );
-      final e = await refused(
-        () => client.collection('c').incr('lives', -1, min: 0),
-      );
-      expect(e.isOutOfRange, isTrue);
-      expect(e.isVersionMismatch, isFalse);
-      expect(e.currentVersion, isNull);
-      expect(e.hasCurrentVersion, isFalse);
+        fake.answer(
+          409,
+          '{"error":{"code":"conflict","message":"x",'
+          '"details":{"reason":"out_of_range","value":987654}}}',
+        );
+        final e = await refused(
+          () => client.collection('c').incr('lives', -1, min: 0),
+        );
+        expect(e.isOutOfRange, isTrue);
+        expect(e.currentValue, 987654);
+        expect(e.isVersionMismatch, isFalse);
+        expect(e.currentVersion, isNull);
+        expect(e.hasCurrentVersion, isFalse);
 
-      final before = fake.requests.length;
-      expect(
-        () => client.collection('c').incr('lives', 1, min: 2, max: 1),
-        throwsA(
-          isA<ArgumentError>().having(
-            (e) => e.message,
-            'message',
-            'kv incr min must not be greater than max',
+        final before = fake.requests.length;
+        expect(
+          () => client.collection('c').incr('lives', 1, min: 2, max: 1),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              'kv incr min must not be greater than max',
+            ),
           ),
-        ),
-      );
-      expect(fake.requests, hasLength(before));
-    });
+        );
+        expect(fake.requests, hasLength(before));
+      },
+    );
 
     test('serverTime: GET /time without the token, in UTC', () async {
       fake.answer(

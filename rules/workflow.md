@@ -23,7 +23,11 @@
   main session runs the tools, edits the tree or touches git.
 - **Do not edit any other repository under `~/git/yyt.life/`.** `service`, `tslib` and
   `csharplib` are read here — the gateway's Go source is the normative wire spec — and
-  that access is read-only.
+  that source access is read-only. `git fetch origin` in `service` is the
+  narrow metadata-only exception required by `architecture.md`: it may update
+  remote refs and objects, never its checkout, index or local branches. If fetch
+  fails, report it and keep the service watermark unchanged until the required
+  remote revision can be verified.
 - The repo is **public**. Never `--no-verify`, and never `git reset --hard` with
   uncommitted work in the tree. `.claude/settings.json` installs a Claude Code guard
   that refuses those commands; if it blocks something legitimate, fix the guard, do not

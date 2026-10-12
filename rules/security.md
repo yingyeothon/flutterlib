@@ -107,8 +107,9 @@
   the nonce in constant time and tells the caller to discard the URI.
 - `kvstore_client` sends the token as `Authorization: Bearer` from one requester and
   nowhere else; a `KvStoreException` is a status, a server code, an optional server
-  reason word and, on a lost compare-and-set for a reader, the live version — never
-  a key, a value, a URL or a body; a log line is a method, a route kind and, once an
+  reason word and, on a lost compare-and-set for a reader, the live version.
+  `currentValue` exposes the stored counter for an out-of-range increment but
+  never enters diagnostics — neither does a key, a URL or a body; a log line is a method, a route kind and, once an
   answer arrived, a status and a byte count. A key and a value are peer-chosen by
   the time they reach a message, so a local refusal names the grammar, never the
   input.

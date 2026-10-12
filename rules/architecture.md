@@ -125,18 +125,20 @@
   port is service `d3fac64` (2026-09-09: the `server` scope, mail and its stamp,
   `incr` bounds, `GET /time`); it went unported for three weeks, and meanwhile
   `isUserNamespace` read `writeScope` alone while the service's `isKvPerOwner` takes
-  either scope, so a mail collection got the wrong path. Every later commit up to
-  `a3fa068` was read on 2026-09-30 and changes no kv route (console caps, and the
-  `/lb` and `/social` stacks, which have clients of their own since 2026-10-01).
+  either scope, so a mail collection got the wrong path. Every later relevant commit up to
+  `6ff0ba6` was read on 2026-10-12: auth CORS, push routing and push token caps
+  change no kv route. `out_of_range` now exposes the already-ported stored
+  counter through `KvStoreException.currentValue`; `details.current` remains
+  a version. The fake already sends this counter.
   Before kv work, fetch the `service` repository and
   run, as one line:
 
   ```bash
-  git -C ~/git/yyt.life/service log --oneline a3fa068..origin/main -- services/state/src services/state/README.md packages/console-db/src/kvstore.ts docs/kvstore.md
+  git -C ~/git/yyt.life/service log --oneline 6ff0ba6..origin/main -- services/state/src services/state/README.md packages/console-db/src/kvstore.ts docs/kvstore.md
   ```
 
   Read every commit it lists, port what a client can see into both the client and
-  the fake, then replace `a3fa068` in this bullet (both places) with the newest
+  the fake, then replace `6ff0ba6` in this bullet (both places) with the newest
   commit you read, and `d3fac64` with the newest commit you ported, if any. An empty
   list changes nothing here.
 - The meta route is the current instance of the exception above (reported to the

@@ -131,8 +131,8 @@ names the rule, never the input. The constants are in `KvRules`, cited to the se
 `exists`, a mail key already there), `isOutOfRange` (409 `out_of_range`),
 `isForbidden` (403), `isUnauthorized` (401), `isNotFound` (404); `reason` also
 carries `not_a_number`, `overflow` and `wrong_namespace`. The server's
-`details.value` on `out_of_range` is a stored value and is not carried; read it with
-`get`. `status` `0` with `code` `network` is a timeout or
+`details.value` on `out_of_range` is available as `currentValue`, the stored
+counter rather than its version. It never appears in diagnostics. `status` `0` with `code` `network` is a timeout or
 a connection failure; `malformed_response` (with the answer's status) is a body or an
 `ETag` the server promised and did not send, or a body over 4 MiB. `toString()` is
 `KvStoreException(code, status)` and nothing else.
@@ -148,7 +148,7 @@ a connection failure; `malformed_response` (with the answer's status) is a body 
   `from`, `updatedAt`), `KvWriteResult`, `KvListEntry` (with `from`), `KvPage`,
   `KvIncrResult`, `KvOrder`, `KvScope` (`team`, `server`, `project`, `user` as
   strings).
-- `KvStoreException` (`status`, `code`, `reason`, `currentVersion`,
+- `KvStoreException` (`status`, `code`, `reason`, `currentVersion`, `currentValue`,
   `hasCurrentVersion`, the `is…` predicates, and the parsers `fromResponse`,
   `parseEtagVersion`, `parseExpiresAt`), `KvRules` (the server's grammars and
   bounds, and the checks).

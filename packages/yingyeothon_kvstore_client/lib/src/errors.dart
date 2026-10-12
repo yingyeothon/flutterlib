@@ -4,7 +4,8 @@ import 'package:yingyeothon_codec/yingyeothon_codec.dart';
 /// network, refused. Local refusals (grammar, size, ranges) are plain
 /// [ArgumentError]s thrown before any request is made.
 ///
-/// Carries a status and a code, never a key, a value, a URL or the token.
+/// Carries a status and a code, never a key, a URL or the token. The stored counter is available only
+/// as [currentValue], never in diagnostics.
 final class KvStoreException implements Exception {
   /// Creates an exception.
   const KvStoreException(
@@ -12,6 +13,7 @@ final class KvStoreException implements Exception {
     this.code, {
     this.reason,
     this.currentVersion,
+    this.currentValue,
     this.hasCurrentVersion = false,
   });
 
@@ -43,6 +45,10 @@ final class KvStoreException implements Exception {
   /// [hasCurrentVersion] when the key is absent. Only a caller with the read
   /// right is told.
   final int? currentVersion;
+
+  /// The stored counter from `details.value` on an out-of-range increment.
+  /// This is a value, not a version, and is never included in [toString].
+  final int? currentValue;
 
   /// Whether the server sent `details.current` at all.
   final bool hasCurrentVersion;
@@ -79,15 +85,14 @@ final class KvStoreException implements Exception {
 
   /// `409` with `details.reason` `out_of_range`: `incr` would have left the
   /// counter outside the `min`/`max` it was given, and nothing was written.
-  /// The server's `details.value` (the stored number) is not carried; read
-  /// it with `get`.
+  /// [currentValue] carries the stored number when the server supplies it.
   bool get isOutOfRange => isConflict && reason == 'out_of_range';
 
   /// `404`: no such collection in the caller's project, or no such key.
   bool get isNotFound => status == 404;
 
   /// Builds the exception from a refused response. The body is read for its
-  /// `code`, `details.reason` and `details.current` only.
+  /// `code`, `details.reason`, `details.current` and `details.value` only.
   factory KvStoreException.fromResponse(int status, String body) {
     final decoded = Json.tryDecode(body);
     final value = decoded is JsonDecoded ? decoded.value : null;
@@ -105,6 +110,9 @@ final class KvStoreException implements Exception {
       code != null && _codePattern.hasMatch(code) ? code : 'http_$status',
       reason: reason != null && _codePattern.hasMatch(reason) ? reason : null,
       currentVersion: current is int ? current : null,
+      currentValue: status == 409 && reason == 'out_of_range'
+          ? details?.getInt('value')
+          : null,
       hasCurrentVersion: hasCurrent && (current == null || current is int),
     );
   }
