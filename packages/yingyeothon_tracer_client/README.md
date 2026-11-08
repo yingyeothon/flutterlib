@@ -31,7 +31,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_tracer_client
-      ref: v0.3.0 # the first tag with the tracer packages (not released yet; v0.2.0 does not contain them)
+      ref: v0.3.0
 ```
 
 The package is on main, pending an owner-cut release. The snippet names the
