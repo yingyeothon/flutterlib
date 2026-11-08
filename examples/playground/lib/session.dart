@@ -10,6 +10,7 @@ import 'package:yingyeothon_kvstore_client/yingyeothon_kvstore_client.dart';
 import 'package:yingyeothon_leaderboard_client/yingyeothon_leaderboard_client.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 import 'package:yingyeothon_social_client/yingyeothon_social_client.dart';
+import 'package:yingyeothon_tracer_client/yingyeothon_tracer_client.dart';
 
 import 'config.dart';
 import 'map_layout.dart';
@@ -37,9 +38,11 @@ class Session extends ChangeNotifier {
     : config = config ?? PlaygroundConfig.fromEnvironment {
     logger = createFilteredLogger(
       severity: LogSeverity.debug,
-      writer: LogWriters.fromFunction(
-        (s, m, c) => note(LogWriters.format(s, m, c)),
-      ),
+      writer: LogWriters.combine([
+        LogWriters.fromFunction((s, m, c) => note(LogWriters.format(s, m, c))),
+        // The SDK's lines also go to Tracer.current (a no-op while off).
+        const TracerLogWriter(),
+      ]),
     );
   }
 

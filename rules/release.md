@@ -27,6 +27,8 @@
 1. The green gate and the manual verification (`manual-verification.md`) on the commit
    to be tagged — the offline demo, and the dev gateway when possible.
 2. Bump `version:` in every `packages/*/pubspec.yaml` and `tool/pubspec.yaml`
+   and `tracerSdkVersion` in `tracer_client/lib/src/tracer_client.dart` (a test
+   fails until it matches), then regenerate the tracer golden (`testing.md`)
    (`examples/playground/pubspec.yaml` is the app's own version: leave it). Then, by
    hand — nothing gates these — set `ref: vX.Y.Z` in every git `## Install` snippet
    (every package README except `fake_gateway`'s, `README.md`,

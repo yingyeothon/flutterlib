@@ -5,8 +5,10 @@
 - `flutterlib` holds the Dart client libraries of the yyt platform, ported from
   [tslib](https://github.com/yingyeothon/tslib) and
   [csharplib](https://github.com/yingyeothon/csharplib): `packages/yingyeothon_*` are
-  pure Dart (no Flutter import) so `dart test` covers them, and `examples/playground`
-  is the Flutter app that shows them wired together.
+  pure Dart (no Flutter import) so `dart test` covers them — except
+  `yingyeothon_tracer_flutter`, the one Flutter package (owner decision 2026-11-08,
+  `rules/workflow.md`) — and `examples/playground` is the Flutter app that shows them
+  wired together.
 - Packages share one pub workspace; the root README owns the package list and
   dependency graph. `fake_gateway` is test/demo infrastructure, never published.
   Package additions follow the owner decisions in `rules/workflow.md`.
@@ -29,7 +31,9 @@
   `asset_client` it is `docs/asset-encryption.md` there, with its vectors, and the
   browser rules in its `rules/deployment.md`. For `auth_client` it is
   `services/auth/README.md` and `services/auth/src/` there (routes in `app.ts`, the
-  token fragment in `redirect.ts`).
+  token fragment in `redirect.ts`). For `tracer_client` it is `docs/tracer.md`
+  (_Wire contract for client libraries_) there and the code that reads the wire,
+  `tracer/internal/{envelope,normalize,ingest}`.
 
 ## Required Rule Lookup
 
@@ -55,8 +59,8 @@ cd examples/playground && flutter create . --platforms=linux --project-name yyt_
 ## Non-Negotiables
 
 - Follow `CONVENTIONS.md` and `rules/architecture.md` for every public symbol.
-- No `package:flutter` under `packages/`; platform glue lives in the app —
-  `rules/flutter.md`.
+- No `package:flutter` under `packages/` except `yingyeothon_tracer_flutter`;
+  platform glue lives in the app — `rules/flutter.md`.
 - Never interpolate untrusted data into a wire protocol, and never log a token, a frame
   body, a payload, a close reason or a URL that came off the wire; log ids, codes and
   lengths — `rules/security.md`.

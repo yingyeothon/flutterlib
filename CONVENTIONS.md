@@ -7,6 +7,9 @@ point here, never restate or contradict.
 
 - **Pure Dart.** Nothing under `packages/` imports `package:flutter`. Platform glue
   (lifecycle, widgets, `debugPrint`, deep links, secure storage) belongs to the app.
+  The one exception is `yingyeothon_tracer_flutter` (screenshots and the widget tree
+  need Flutter); it stays a thin layer over the pure `yingyeothon_tracer_client`,
+  which holds everything testable.
 - **Interfaces with factory constructors.** A public type a consumer holds is an
   `abstract interface class` with a `factory` that redirects to an implementation in
   `lib/src/internal/` (`GatewayLobbyClient(options)`). The implementation is never

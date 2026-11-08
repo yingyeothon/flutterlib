@@ -14,6 +14,7 @@ import 'leaderboard_screen.dart';
 import 'lobby_screen.dart';
 import 'platform_screen.dart';
 import 'social_screen.dart';
+import 'tracer_screen.dart';
 
 /// Config, sign-in, and the offline demo.
 class LoginScreen extends StatefulWidget {
@@ -57,6 +58,11 @@ class _LoginScreenState extends State<LoginScreen> {
         const bool.fromEnvironment('YYT_OFFLINE_AUTOSTART_GAME_KIT')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.of(context).pushNamed(GameKitScreen.route);
+      });
+    }
+    if (kDebugMode && const bool.fromEnvironment('YYT_TRACER_AUTOSTART')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pushNamed(TracerScreen.route);
       });
     }
     if (kDebugMode &&
@@ -393,6 +399,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ? null
                 : () => Navigator.of(context).pushNamed(GameKitScreen.route),
             child: const Text('Game kit'),
+          ),
+          FilledButton.tonal(
+            key: const Key('open-tracer'),
+            onPressed: _busy
+                ? null
+                : () => Navigator.of(context).pushNamed(TracerScreen.route),
+            child: const Text('Tracer'),
           ),
           // No sign-in: the one state route that belongs to nobody.
           FilledButton.tonal(

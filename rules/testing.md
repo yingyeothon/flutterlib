@@ -101,6 +101,25 @@
 - A message-does-not-quote-input test asserts **equality with a template** computed
   from the code and offset, not just absence of one string.
 
+- tracer: `tracer_client/test/fake_http_client.dart` records every envelope
+  decompressed and parses it the way tracer's `envelope.Reader` does (header line,
+  items with `length` and a trailing newline); `test/support.dart` has
+  `SequenceRandom` (ids count up, fixed jitter) and `steppingClock` (1 ms per read),
+  so ids, timestamps and back-off times are exact under `fakeAsync`.
+- **The tracer golden is shared with the service.**
+  `tracer_client/test/golden/report.envelope` is byte-identical to the service's
+  `tracer/testdata/envelopes/yyt-dart/report.envelope`. A change to what the client
+  writes fails `golden_test.dart`; regenerate with `UPDATE_GOLDEN=1 dart test
+  test/golden_test.dart`, check the diff, and when the wire changed, copy it there
+  (a user-directed change in that repo, `workflow.md`): its Go tests count rows per
+  fixture (`internal/ingest` `TestGoldenEnvelopes`, `cmd/tracer` `dev_test.go`) and
+  compare read-API goldens (`go test ./internal/query -update`). The version is in
+  the bytes, so a release bump regenerates it too (`release.md`).
+- In a widget test, an `async` call started inside `tester.runAsync` (a screenshot's
+  `toImage` needs real time) keeps running in the real zone: after a fake-time pump
+  that unblocks it (a dialog popped), give it another short `runAsync` delay before
+  asserting what it sends next (`tracer_flutter`'s report-button test).
+
 ## Integration tests
 
 - `@Tags(['integration'])` marks tests that open a loopback socket: the real

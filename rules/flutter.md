@@ -4,7 +4,12 @@ The libraries are engine-free; this file is about the app around them.
 
 ## Boundaries
 
-- Nothing under `packages/` imports `package:flutter`. Lifecycle, widgets,
+- Nothing under `packages/` imports `package:flutter`, except
+  `yingyeothon_tracer_flutter` (owner decision 2026-11-08, `workflow.md`): it lives
+  outside the pub workspace like the example, keeps the logic in the pure
+  `tracer_client`, and is gated by `flutter analyze`/`flutter test` and
+  `check_coverage --flutter` (`tooling.md`). A second Flutter package needs its own
+  owner decision. Otherwise: lifecycle, widgets,
   `debugPrint`, `url_launcher`, deep links, secure storage: all app code, and the
   example shows the wiring. A Flutter-only convenience goes in the example, not in a
   package.

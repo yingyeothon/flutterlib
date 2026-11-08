@@ -8,17 +8,23 @@
 2. `dart pub get` — the workspace resolves once, at the root.
 3. `dart format --output=none --set-exit-if-changed packages tool examples` — the
    formatter is Dart 3.7+'s tall style; do not hand-format against it.
-4. `dart analyze --fatal-infos packages tool` — the example is analyzed by
-   `flutter analyze` in step 8, because it resolves Flutter separately.
-5. `dart test --reporter=compact` **per member** (`packages/*/`, `tool/`), integration
+4. `dart analyze --fatal-infos <pure packages> tool` — the pure packages are what
+   `dart run tool/bin/list_packages.dart` prints (`--flutter` prints the others,
+   classified by `isFlutterPubspec` in `tool/lib/src/packages.dart`). The Flutter
+   package and the example are analyzed by `flutter analyze` in step 8, because they
+   resolve Flutter separately; CI's Dart job has no Flutter SDK at all.
+5. `dart test --reporter=compact` **per member** (the pure packages, `tool/`), integration
    tag included. `dart test` at the workspace root does not fan out: it looks for a
    `test/` beside the root pubspec, finds none, prints its usage and exits non-zero —
    which read as "passed" once when only the last line was checked.
-6. `dart run tool/bin/check_coverage.dart` — per package, own suite, `-x integration`.
+6. `dart run tool/bin/check_coverage.dart` — per pure package, own suite,
+   `-x integration`; `--flutter` measures the Flutter packages with `flutter test
+   --branch-coverage` instead (step 8). Same floors.
 7. `dart run tool/bin/check_docs.dart`.
 8. `flutter pub get && flutter analyze --fatal-infos && flutter test` in every
+   Flutter package, then `check_coverage --flutter`, then the same three in every
    `examples/*/`. `SKIP_EXAMPLE_GATE=1` skips this on a machine without Flutter; CI
-   never does.
+   never does (its `example` job runs it).
 
 ## Workspace facts
 
@@ -39,19 +45,30 @@
   tests. It depends on the packages by `path:` and resolves on its own; `check_docs`
   refuses an example with `resolution: workspace`. Path dependencies of path
   dependencies resolve, so the example needs no `dependency_overrides`.
+- `packages/yingyeothon_tracer_flutter` is not a member either, for the same reason:
+  no `resolution: workspace`, its own `analysis_options.yaml` (Flutter's lints plus
+  the root's rules), resolved by `flutter pub get` in its directory. It still sits
+  under `packages/`, so `check_docs` treats it as a package (README shape, graph
+  edges, barrel `show` lists, the shared version). The root `dart pub get` does not
+  mind a non-member pubspec below it (checked 2026-11-08, Dart 3.13.7).
 - `dart pub get` needs every workspace member to exist; a new member needs its
   `pubspec.yaml` before the root resolves again.
 
 ## Scripts
 
+- `list_packages.dart` — prints the pure package directories, or with `--flutter`
+  the Flutter ones; `gate.sh` and CI build their Dart and Flutter loops from it.
+
 - `check_coverage.dart` — `dart test --coverage-path=coverage/lcov.info
-  --branch-coverage -x integration` per package, then sums `DA:`/`BRDA:` records for
+  --branch-coverage -x integration` per pure package (`flutter test` with the same
+  flags per Flutter package under `--flutter`), then sums `DA:`/`BRDA:` records for
   the package's `lib/` (`tool/lib/src/lcov.dart`). `COVERAGE_LINE_MIN` /
   `COVERAGE_BRANCH_MIN` override the floors. A package with no report fails; a package
   with no branches reports `n/a` and passes on lines.
 - `check_docs.dart` — the numbered list in its header. The mermaid check is a heuristic
   (known first line, no styling, no `end` node, one per H2, ≤ 12 flowchart nodes,
-  `<!-- check-docs: exhaustive -->` lifts the node cap for a routing map); it is not
+  `<!-- check-docs: exhaustive -->` lifts the node cap for a routing map or the root
+  README's dependency graph, which must draw every edge); it is not
   a parser, so render a new diagram once in a viewer.
 - `claude-guard.sh` reads the Bash command from stdin JSON with `jq` and exits 2 on a
   forbidden pattern. Without `jq` it exits 2 too. `.claude/settings.json` invokes it

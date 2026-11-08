@@ -24,10 +24,16 @@ jobs:
           sdk: "3.13"
       - run: dart pub get
       - run: dart format --output=none --set-exit-if-changed packages tool examples
-      - run: dart analyze --fatal-infos packages tool
+      - name: Analyze the pure Dart packages and tool
+        run: |
+          packages="$(dart run tool/bin/list_packages.dart)"
+          test -n "$packages"
+          dart analyze --fatal-infos $packages tool
       - name: Every member's test suite
         run: |
-          for member in packages/*/ tool/; do
+          packages="$(dart run tool/bin/list_packages.dart)"
+          test -n "$packages"
+          for member in $packages tool/; do
             [ -d "$member/test" ] || continue
             ( cd "$member" && dart test --reporter=compact )
           done
@@ -36,7 +42,8 @@ jobs:
       - name: The docs link, index and cover the public surface
         run: dart run tool/bin/check_docs.dart
 
-  # The Flutter half: the example compiles, its widget tests pass, and the
+  # The Flutter half: the Flutter packages and the example compile, their
+  # tests pass (the packages at the coverage floor), and the
   # platform folder injection the README teaches produces a Linux and a web
   # build.
   example:
@@ -48,6 +55,15 @@ jobs:
           channel: stable
           flutter-version: "3.47.x"
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - name: Analyze, test and cover every Flutter package
+        run: |
+          dart pub get
+          packages="$(dart run tool/bin/list_packages.dart --flutter)"
+          test -n "$packages"
+          for package in $packages; do
+            ( cd "$package" && flutter pub get && flutter analyze --fatal-infos && flutter test )
+          done
+          dart run tool/bin/check_coverage.dart --flutter
       - name: Analyze and test every example
         run: |
           for example in examples/*/; do

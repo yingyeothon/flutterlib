@@ -4,7 +4,8 @@ One Flutter app that exercises every package: sign in through the auth channel (
 paste a token), join a lobby (zone map, chat, parties), run a dungeon `q` session,
 watch the reconnect and stop banners, read announcements and save your settings in
 the key-value store, submit a score to a leaderboard and read your rank, set a card
-and befriend a player, and read and download files of an encrypted asset bundle. In a debug build an **Offline
+and befriend a player, read and download files of an encrypted asset bundle, and
+send a debug trail with a "report this" to tracer. In a debug build an **Offline
 demo** starts `yingyeothon_fake_gateway` in the process, so all of it runs with no
 credential and no network.
 
@@ -159,10 +160,35 @@ lib/
   session.dart         ChangeNotifier owning the clients, the map and the log
   map_layout.dart      the playground's reading of the map document
   debug/               kDebugMode-only: offline demo, seeding, forced closes
-  screens/             login, lobby, dungeon, key-value store, leaderboard, friends, asset bundle
+  screens/             login, lobby, dungeon, key-value store, leaderboard, friends, asset bundle, tracer
   widgets/             zone map painter, chat, party panel, banners, log panel
 test/                  widget tests against the fake gateway
 ```
+
+## Tracer
+
+The **Tracer** screen sends debug data to tracer with
+[`yingyeothon_tracer_flutter`](../../packages/yingyeothon_tracer_flutter/README.md):
+*Trace a step* (breadcrumb + log line), *Log a warning*, *Report this* (event with
+the breadcrumbs, buffered lines, a screenshot and the view hierarchy, then a note as
+feedback; also the bug button in its app bar) and *Flush*. `main.dart` starts it with
+`TracerFlutter.initUi`, the app is wrapped in `TracerScreenshot` with a
+`TracerNavigatorObserver`, and the session's logger also writes to
+`TracerLogWriter`, so the SDK's own lines land in tracer. It is off, and says so,
+unless the build passes a DSN — never commit one:
+
+```bash
+flutter run -d linux \
+  --dart-define=TRACER_DSN="$(yyt tracer dsn <res> --profile dev)" \
+  --dart-define=GIT_SHA="$(git rev-parse --short HEAD)"
+```
+
+Against a local `tracer serve`, the DSN is `http://<writeKey>@127.0.0.1:<port>/<trc_id>`
+(from an Android emulator, `10.0.2.2`, or `127.0.0.1` after `adb reverse`); `http`
+works only in a debug build. *Report this* exists only in a debug build.
+`--dart-define=YYT_TRACER_AUTOSTART=true` (debug only) opens the screen and sends one
+step, one warning, a report with screenshot and view hierarchy, and a fixed note, for
+a smoke run with no input tooling.
 
 ## Match and push
 

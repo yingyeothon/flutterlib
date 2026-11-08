@@ -7,7 +7,9 @@ your own game actor — with the sign-in flow that gets it a token and a key-val
 store for announcements and each player's own record.
 
 Pure Dart, no Flutter import, so the same packages run on Android, iOS, desktop and
-web, and `dart test` covers them without a device.
+web, and `dart test` covers them without a device. The one exception is
+`yingyeothon_tracer_flutter`, the Flutter glue of the debug-data client, which sits
+outside the pub workspace and is tested with `flutter test`.
 
 ```dart
 import 'package:yingyeothon_gamebase_client/yingyeothon_gamebase_client.dart';
@@ -45,6 +47,7 @@ handle it.
 | [Errors](docs/errors.md) / [Troubleshooting](docs/troubleshooting.md) | every refusal, close code and symptom |
 | [Game kit](docs/game-kit.md) | one session and purpose-shaped game modules |
 | [Flutter](docs/flutter.md) | platforms, background, debug hooks, desktop verification |
+| [Debug data with tracer](docs/tracer.md) | breadcrumbs, logs, screenshots and notes from a debug build to tracer |
 | [Examples](examples/README.md) | the playground app: offline demo, no credential needed |
 
 ## Packages
@@ -62,9 +65,13 @@ handle it.
 | [yingyeothon_asset_client](packages/yingyeothon_asset_client) | Reader for asset bundles on the CDN: whole files, JSON, ranges, resumable downloads; decrypts and verifies `yyt-enc v1` |
 | [yingyeothon_game_kit](packages/yingyeothon_game_kit) | Purpose-shaped session, content, save, room, turns, board, mail, friends, matchmaking and push |
 | [yingyeothon_push_client](packages/yingyeothon_push_client) | Android/FCM registration and incoming messages through an injected device adapter |
+| [yingyeothon_tracer_client](packages/yingyeothon_tracer_client) | Client for tracer, the debug-data collector: breadcrumbs, batched logs, reports with attachments, feedback; a `logger` sink |
+| [yingyeothon_tracer_flutter](packages/yingyeothon_tracer_flutter) | **The one Flutter package**: tracer setup per isolate, screenshots, view hierarchy, lifecycle, navigation and error breadcrumbs, a debug-only report button |
 | [yingyeothon_fake_gateway](packages/yingyeothon_fake_gateway) | In-process gateway for tests and the offline demo; never published |
 
 The arrows are the `dependencies:` each pubspec declares; `event_broker` stands alone.
+
+<!-- check-docs: exhaustive -->
 
 ```mermaid
 graph LR
@@ -92,6 +99,9 @@ graph LR
   yingyeothon_push_client --> yingyeothon_codec
   yingyeothon_push_client --> yingyeothon_logger
   yingyeothon_fake_gateway --> yingyeothon_codec
+  yingyeothon_tracer_client --> yingyeothon_logger
+  yingyeothon_tracer_flutter --> yingyeothon_logger
+  yingyeothon_tracer_flutter --> yingyeothon_tracer_client
 ```
 
 `logger -> codec` is an edge tslib does not have: a structured log context is a

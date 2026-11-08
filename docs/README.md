@@ -25,6 +25,7 @@ packages. Each page is one task; read the first three in order, then jump.
 | know what happens on a bad network, a gateway restart, a dead token | [Connection lifecycle](connection-lifecycle.md) |
 | handle every refusal, close code and exception | [Errors](errors.md) |
 | ship on web, keep the socket alive across background, verify on desktop | [Flutter](flutter.md) |
+| leave a debug trail — steps, logs, a screenshot, a tester's note — for later | [Debug data with tracer](tracer.md) |
 | find out why it does not connect | [Troubleshooting](troubleshooting.md) |
 
 Which page draws on which package:
@@ -54,6 +55,9 @@ flowchart LR
   sc --> logger
   asc --> codec
   asc --> logger
+  tracer["Debug data with tracer"] --> tf["tracer_flutter"]
+  tf --> tc["tracer_client"]
+  tc --> logger
 ```
 
 ## Reference
@@ -65,6 +69,8 @@ flowchart LR
   [leaderboard_client](../packages/yingyeothon_leaderboard_client/README.md),
   [social_client](../packages/yingyeothon_social_client/README.md),
   [asset_client](../packages/yingyeothon_asset_client/README.md),
+  [tracer_client](../packages/yingyeothon_tracer_client/README.md),
+  [tracer_flutter](../packages/yingyeothon_tracer_flutter/README.md),
   [codec](../packages/yingyeothon_codec/README.md),
   [logger](../packages/yingyeothon_logger/README.md),
   [event_broker](../packages/yingyeothon_event_broker/README.md),
@@ -74,7 +80,8 @@ flowchart LR
 ## What lives in the `service` repository
 
 The gateway's wire protocol, the auth service's endpoints, the key-value store, the
-leaderboards, the social graph, the asset CDN with its encryption format, and the console are owned by
+leaderboards, the social graph, the asset CDN with its encryption format, tracer's
+ingest, and the console are owned by
 [yingyeothon/service](https://github.com/yingyeothon/service). This guide cites them;
 when the two disagree, `service` is right and this SDK follows.
 

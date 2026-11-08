@@ -449,6 +449,28 @@ The commit lines:
 - `Not run: dev gateway on chrome and android — no tkinter for the clipboard`
 - `Not run: dev assets, resumed download — no admin for the limit`
 
+## tracer against a local `tracer serve`
+
+- The fake for tracer is the real thing: build it from the service checkout
+  (`cd ~/git/yyt.life/service/tracer && go build -o /tmp/tracer-local ./cmd/tracer`)
+  and run it in local mode from a temp dir, environment only:
+  `TRACER_LISTEN=127.0.0.1:<port> TRACER_DATA_DIR=<dir> TRACER_LOCAL_CONFIG=<dir>/tracer.json
+  TRACER_DISK_MAX_PCT=99`. `tracer.json` is `{"resources":[{"id":"trc_…","writeKey":
+  "<≥16 chars>"}],"readToken":"yyt_<48 hex>"}`; make both values up per run, keep them
+  in the temp dir, never in either tree. Check the port is free first
+  (`ss -ltnp | grep <port>`) and stop the server by its PID afterwards.
+- Send with the pure client from a scratch program outside the repo, the DSN
+  `http://<writeKey>@127.0.0.1:<port>/<trc_id>` from the environment, then read back
+  with `curl -H "Authorization: Bearer <readToken>"` on `/v1/<trc>/events`,
+  `/events/<id>` (frames, attachments), `/logs` and `/attachments/<id>`. A wrong key
+  must leave the client `stopped`. 2026-11-08: event (release, dist, environment,
+  tags, `user.id`, device, OS, `traceId`, exception frames with `filename`,
+  breadcrumbs), its PNG and view-hierarchy attachments, the linked feedback, and
+  typed log attributes all read back; `drops` empty.
+- The read API shows a frame's `filename` and `module`, not `abs_path`, and tracer
+  groups by `filename|function`; the client writes `<package>/<path>` as
+  `filename` for that reason.
+
 ## Method
 
 - Vary one thing at a time. A claim that a change restored a behaviour needs a

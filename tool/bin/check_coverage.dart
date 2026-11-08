@@ -9,10 +9,15 @@
 // transport against a loopback server, and the pure suite must reach the
 // floor without them.
 //
-//   dart run tool/bin/check_coverage.dart [package-dir ...]
+// Pure Dart packages run under `dart test`; a Flutter package (one whose
+// pubspec depends on the flutter sdk) runs only with `--flutter`, under
+// `flutter test`, so the Dart-only CI job never needs Flutter.
+//
+//   dart run tool/bin/check_coverage.dart [--flutter] [package-dir ...]
 import 'dart:io';
 
 import 'package:yyt_tool/src/lcov.dart';
+import 'package:yyt_tool/src/packages.dart';
 
 Future<void> main(List<String> args) async {
   final root = _repoRoot();
@@ -21,11 +26,14 @@ Future<void> main(List<String> args) async {
   final branchMin =
       double.tryParse(Platform.environment['COVERAGE_BRANCH_MIN'] ?? '') ?? 70;
 
-  final packages = args.isNotEmpty
-      ? args.map((a) => Directory(a)).toList()
+  final flutter = args.contains('--flutter');
+  final dirs = args.where((a) => a != '--flutter').toList();
+  final packages = dirs.isNotEmpty
+      ? dirs.map((a) => Directory(a)).toList()
       : (Directory('${root.path}/packages')
             .listSync()
             .whereType<Directory>()
+            .where((d) => _isFlutter(d) == flutter)
             .toList()
           ..sort((a, b) => a.path.compareTo(b.path)));
 
@@ -35,15 +43,23 @@ Future<void> main(List<String> args) async {
     final name = dir.uri.pathSegments.where((s) => s.isNotEmpty).last;
     final lcov = File('${dir.path}/coverage/lcov.info');
     if (lcov.existsSync()) lcov.deleteSync();
-    final result = await Process.run('dart', <String>[
-      'test',
-      '--coverage-path=coverage/lcov.info',
-      '--branch-coverage',
-      '-x',
-      'integration',
-      '--reporter',
-      'failures-only',
-    ], workingDirectory: dir.path);
+    final result = _isFlutter(dir)
+        ? await Process.run('flutter', <String>[
+            'test',
+            '--coverage-path=coverage/lcov.info',
+            '--branch-coverage',
+            '-x',
+            'integration',
+          ], workingDirectory: dir.path)
+        : await Process.run('dart', <String>[
+            'test',
+            '--coverage-path=coverage/lcov.info',
+            '--branch-coverage',
+            '-x',
+            'integration',
+            '--reporter',
+            'failures-only',
+          ], workingDirectory: dir.path);
     if (result.exitCode != 0) {
       stdout.write(result.stdout);
       stderr.write(result.stderr);
@@ -78,6 +94,11 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
   print('coverage: every package covers itself');
+}
+
+bool _isFlutter(Directory package) {
+  final pubspec = File('${package.path}/pubspec.yaml');
+  return pubspec.existsSync() && isFlutterPubspec(pubspec.readAsStringSync());
 }
 
 bool _isOwnLib(String sfPath, Directory package) {

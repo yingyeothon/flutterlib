@@ -27,7 +27,10 @@
   narrow metadata-only exception required by `architecture.md`: it may update
   remote refs and objects, never its checkout, index or local branches. If fetch
   fails, report it and keep the service watermark unchanged until the required
-  remote revision can be verified.
+  remote revision can be verified. The one other exception is a change the user
+  directs there in the task itself — such as the `yyt-dart` tracer fixture and the Go
+  test expectations it moves (2026-11-08, `testing.md`); it follows that
+  repository's own rules and its commit is the user's call.
 - The repo is **public**. Never `--no-verify`, and never `git reset --hard` with
   uncommitted work in the tree. `.claude/settings.json` installs a Claude Code guard
   that refuses those commands; if it blocks something legitimate, fix the guard, do not
@@ -159,6 +162,12 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
   No additional platform package is needed. The workspace now contains all
   twelve; the root README owns the list and dependency graph. Further packages need an owner
   decision and a reason that survives "can this run on a phone?".
+- Two more packages, owner-directed on 2026-11-08 for the platform's debug-data
+  collector (service `docs/tracer.md`): `tracer_client` (pure Dart; DSN, envelope
+  writer, buffering, transport, a `logger` sink) and `tracer_flutter`, the
+  **first Flutter package** under `packages/` (setup per isolate, screenshot, view
+  hierarchy, lifecycle/navigation/error breadcrumbs, a debug-only report button).
+  The dooroo Flutter apps and any yyt game depend on them. Fourteen packages now.
 - The gateway wire protocol is owned by the `service` repository. When it changes,
   this SDK follows it — never the other way round.
 - The example is one app (`playground`) that exercises every package; a second

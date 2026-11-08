@@ -34,9 +34,14 @@ dependencies:
     path: ../../packages/yingyeothon_social_client
   yingyeothon_logger:
     path: ../../packages/yingyeothon_logger
+  yingyeothon_tracer_client:
+    path: ../../packages/yingyeothon_tracer_client
+  yingyeothon_tracer_flutter:
+    path: ../../packages/yingyeothon_tracer_flutter
 
 dev_dependencies:
   flutter_lints: ^6.0.0
+  http: ^1.6.0
   flutter_test:
     sdk: flutter
 
