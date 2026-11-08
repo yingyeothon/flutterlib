@@ -1,6 +1,6 @@
 name: yingyeothon_game_kit
 description: Purpose-shaped session, save, room and game modules for yyt.
-version: 0.3.1
+version: 0.3.2
 publish_to: none
 repository: https://github.com/yingyeothon/flutterlib
 resolution: workspace

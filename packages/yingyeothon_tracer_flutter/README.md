@@ -29,7 +29,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_tracer_flutter
-      ref: v0.3.1
+      ref: v0.3.2
 ```
 
 Depend on this package only: it re-exports the core (`Tracer`, `TracerLevel`, …).
