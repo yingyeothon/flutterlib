@@ -29,12 +29,12 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_tracer_flutter
-      ref: v0.2.0
+      ref: v0.3.0 # the first tag with the tracer packages (not released yet; v0.2.0 does not contain them)
   yingyeothon_tracer_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_tracer_client
-      ref: v0.2.0
+      ref: v0.3.0 # the first tag with the tracer packages (not released yet; v0.2.0 does not contain them)
 ```
 
 Depend on both, on the same `ref:`: this package does not re-export the core
