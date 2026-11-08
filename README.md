@@ -138,32 +138,32 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_gamebase_client
-      ref: v0.3.2
+      ref: v0.3.3
   yingyeothon_auth_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_auth_client
-      ref: v0.3.2
+      ref: v0.3.3
   yingyeothon_kvstore_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_kvstore_client
-      ref: v0.3.2
+      ref: v0.3.3
   yingyeothon_asset_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_asset_client
-      ref: v0.3.2
+      ref: v0.3.3
   yingyeothon_leaderboard_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_leaderboard_client
-      ref: v0.3.2
+      ref: v0.3.3
   yingyeothon_social_client:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_social_client
-      ref: v0.3.2
+      ref: v0.3.3
 ```
 
 Nothing is on pub.dev. The packages need the Dart SDK 3.13+ (Flutter 3.47+); on an

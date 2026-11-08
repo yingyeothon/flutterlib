@@ -1,6 +1,6 @@
 name: yingyeothon_tracer_client
 description: Pure Dart client for yyt tracer, the debug-data collector - breadcrumbs, logs, reports with screenshots and feedback over its envelope ingest. No Sentry dependency.
-version: 0.3.2
+version: 0.3.3
 # Installed by git dependency; nothing is on pub.dev (rules/release.md).
 publish_to: none
 repository: https://github.com/yingyeothon/flutterlib

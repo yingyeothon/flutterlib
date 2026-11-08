@@ -8,7 +8,7 @@ import 'internal/tracer_client_impl.dart';
 
 /// The version this library reports in the envelope header (`sdk.version`)
 /// and in `X-Sentry-Auth` (`sentry_client=yyt-dart/<version>`).
-const String tracerSdkVersion = '0.3.2';
+const String tracerSdkVersion = '0.3.3';
 
 /// Severity of a breadcrumb, a log line or a report.
 ///

@@ -35,7 +35,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_gamebase_client
-      ref: v0.3.2
+      ref: v0.3.3
 ```
 
 `yingyeothon_codec` and `yingyeothon_logger` are path dependencies inside the same

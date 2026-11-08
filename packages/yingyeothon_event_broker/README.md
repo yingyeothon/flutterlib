@@ -23,7 +23,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_event_broker
-      ref: v0.3.2
+      ref: v0.3.3
 ```
 
 ## Usage
