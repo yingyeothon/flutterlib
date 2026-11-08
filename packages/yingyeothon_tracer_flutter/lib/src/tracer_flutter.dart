@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 import 'package:yingyeothon_tracer_client/yingyeothon_tracer_client.dart';
 
@@ -31,6 +33,15 @@ abstract final class TracerFlutter {
   static ui.ErrorCallback? _ownPlatformError;
   static AppLifecycleListener? _lifecycle;
   static bool _installed = false;
+  static Future<_DeviceInfo>? _deviceRead;
+  static Future<String?>? _releaseRead;
+  static Future<void> _platformReady = Future<void>.value();
+
+  /// Completes once the platform reads the last [initUi] started have been
+  /// applied (or failed); at once when none is in flight. A smoke run or a
+  /// test awaits it, with a timeout, before a report that should name the
+  /// device; nothing else needs to.
+  static Future<void> get platformReady => _platformReady;
 
   /// Initialises tracer in the UI isolate and returns the client.
   ///
@@ -45,6 +56,21 @@ abstract final class TracerFlutter {
   /// allowed in debug builds only. In a release build the client is off
   /// unless [enableInRelease] is true, even if a DSN was compiled in.
   ///
+  /// The client is returned at once. Unless [readPlatform] is false, the
+  /// platform is read in the background once per isolate
+  /// (`device_info_plus`, `package_info_plus`) and applied when it arrives;
+  /// what is written before that goes without it. On Android and iOS it
+  /// fills `contexts.device` (`model`, `manufacturer`, `brand`, `family`,
+  /// `simulator`; on iOS also the hardware id as `model_id`) and
+  /// `contexts.os` (`name`, `version`) unless [contexts] has that key; on
+  /// every native platform, when [release] is null or empty, the release
+  /// `<packageName>@<version>+<buildNumber>` (the application id or bundle
+  /// id on mobile). The user-set device name, device ids, hosts and build
+  /// fingerprints are never sent. A platform that cannot answer leaves them
+  /// out. The read overwrites a `device`, `os` or release set with
+  /// [TracerClient.setContext] or [TracerClient.setRelease] before it
+  /// arrives: pass yours here instead, or turn [readPlatform] off.
+  ///
   /// Calling it again replaces the client; the hooks are installed by the
   /// first call that turns tracer on and keep that call's choices.
   static TracerClient initUi({
@@ -58,6 +84,7 @@ abstract final class TracerFlutter {
     Map<String, Object?> contexts = const {},
     bool captureErrors = true,
     bool lifecycle = true,
+    bool readPlatform = true,
     bool enableInRelease = false,
     http.Client? client,
     Logger? logger,
@@ -77,6 +104,15 @@ abstract final class TracerFlutter {
         logger: logger,
       ),
     );
+    _platformReady = Future<void>.value();
+    if (tracer.enabled && readPlatform) {
+      _applyPlatform(
+        tracer,
+        device: !contexts.containsKey('device'),
+        os: !contexts.containsKey('os'),
+        release: release == null || release.isEmpty,
+      );
+    }
     if (tracer.enabled && !_installed) {
       _installed = true;
       if (captureErrors) _installErrorHooks();
@@ -91,7 +127,10 @@ abstract final class TracerFlutter {
   /// returns the client; tagged `isolate` = [isolate]. Each isolate has its
   /// own client and breadcrumb ring; `--dart-define`s reach every isolate.
   /// `close()` it before the isolate ends, or its buffered lines are lost.
-  /// Off in a release build unless [enableInRelease] is true.
+  /// Off in a release build unless [enableInRelease] is true. It reads no
+  /// platform plugin (a background isolate may have no channel to one):
+  /// pass [release] and a `device` context in [contexts] if this isolate's
+  /// lines should carry them (for example values the UI isolate sends it).
   static TracerClient initBackground({
     String dsn = TracerDefines.dsn,
     String? release,
@@ -122,9 +161,12 @@ abstract final class TracerFlutter {
 
   /// Restores the error handlers [initUi] replaced — only where its own are
   /// still installed, so a handler set later (a crash reporter's) stays —
-  /// removes the lifecycle listener and closes [Tracer.current]. For tests
-  /// and hot restarts.
+  /// removes the lifecycle listener, forgets the platform read by [initUi]
+  /// and closes [Tracer.current]. For tests and hot restarts.
   static Future<void> dispose() async {
+    _deviceRead = null;
+    _releaseRead = null;
+    _platformReady = Future<void>.value();
     if (_installed) {
       if (_ownFlutterError != null &&
           identical(FlutterError.onError, _ownFlutterError)) {
@@ -165,13 +207,130 @@ abstract final class TracerFlutter {
     tags: {if (gitSha.isNotEmpty) 'git_sha': gitSha, ...tags},
     userId: userId,
     contexts: {
-      'os': {'name': defaultTargetPlatform.name},
+      'os': {'name': _osName(defaultTargetPlatform)},
       ...contexts,
     },
     client: client,
     logger: logger,
     allowHttpLoopback: kDebugMode,
   );
+
+  static String _osName(TargetPlatform platform) => switch (platform) {
+    TargetPlatform.android => 'Android',
+    TargetPlatform.iOS => 'iOS',
+    TargetPlatform.macOS => 'macOS',
+    TargetPlatform.linux => 'Linux',
+    TargetPlatform.windows => 'Windows',
+    TargetPlatform.fuchsia => 'Fuchsia',
+  };
+
+  /// Applies the platform reads (each started once per isolate) to
+  /// [tracer] when they arrive, for the parts the app did not pass; never
+  /// throws, never waits. Nothing on web, which tracer does not support.
+  static void _applyPlatform(
+    TracerClient tracer, {
+    required bool device,
+    required bool os,
+    required bool release,
+  }) {
+    if (kIsWeb) return;
+    final applied = <Future<void>>[];
+    if (device || os) {
+      final read = _deviceRead ??= _readDevice();
+      applied.add(
+        read.then((d) {
+          if (!tracer.enabled) return;
+          if (device && d.device != null) tracer.setContext('device', d.device);
+          if (os && d.os != null) tracer.setContext('os', d.os);
+        }),
+      );
+    }
+    if (release) {
+      final read = _releaseRead ??= _readRelease();
+      applied.add(
+        read.then((r) {
+          if (tracer.enabled && r != null) tracer.setRelease(r);
+        }),
+      );
+    }
+    _platformReady = Future.wait(applied).then((_) {});
+  }
+
+  /// `UIDevice.modelName` for a hardware id missing from device_info_plus's
+  /// table.
+  static const String _unknownIosModel = 'Unknown device';
+
+  /// Device and OS from device_info_plus on Android and iOS, both null
+  /// elsewhere or when the plugin fails. Completes normally. Reads only
+  /// what is listed; never the user-set device name, a device id, a host or
+  /// a build fingerprint.
+  static Future<_DeviceInfo> _readDevice() async {
+    try {
+      switch (defaultTargetPlatform) {
+        case TargetPlatform.android:
+          final a = await DeviceInfoPlugin().androidInfo;
+          return _DeviceInfo(
+            device: _compact({
+              'model': a.model,
+              'manufacturer': a.manufacturer,
+              'brand': a.brand,
+              // Sentry's Android SDK: the model's first word.
+              'family': a.model.split(' ').first,
+              'simulator': !a.isPhysicalDevice,
+            }),
+            os: _compact({'name': 'Android', 'version': a.version.release}),
+          );
+        case TargetPlatform.iOS:
+          final i = await DeviceInfoPlugin().iosInfo;
+          final id = i.utsname.machine;
+          final name = i.modelName;
+          return _DeviceInfo(
+            device: _compact({
+              // `iPhone 15 Pro`, else the hardware id (`iPhone16,1`), which
+              // is always `model_id`.
+              'model': name.isEmpty || name == _unknownIosModel ? id : name,
+              'model_id': id,
+              'manufacturer': 'Apple',
+              'brand': 'Apple',
+              'family': i.model,
+              'simulator': !i.isPhysicalDevice,
+            }),
+            os: _compact({'name': 'iOS', 'version': i.systemVersion}),
+          );
+        default:
+          // Desktop: the OS name set at init is all.
+          return const _DeviceInfo();
+      }
+    } on Object {
+      return const _DeviceInfo();
+    }
+  }
+
+  /// `<packageName>@<version>+<buildNumber>` from package_info_plus (no
+  /// `+` part without a build number); null without a package name or
+  /// version, or when the plugin fails.
+  static Future<String?> _readRelease() async {
+    try {
+      final p = await PackageInfo.fromPlatform();
+      if (p.packageName.isEmpty || p.version.isEmpty) return null;
+      return p.buildNumber.isEmpty
+          ? '${p.packageName}@${p.version}'
+          : '${p.packageName}@${p.version}+${p.buildNumber}';
+    } on Object {
+      return null;
+    }
+  }
+
+  /// [m] without empty strings; null when nothing is left but flags.
+  static Map<String, Object?>? _compact(Map<String, Object?>? m) {
+    if (m == null) return null;
+    final out = {
+      for (final e in m.entries)
+        if (e.value is! String || (e.value! as String).isNotEmpty)
+          e.key: e.value,
+    };
+    return out.values.any((v) => v is String) ? out : null;
+  }
 
   /// A breadcrumb with the error's text (it stays on the device until a
   /// report) and a log line with its type only.
@@ -221,6 +380,13 @@ abstract final class TracerFlutter {
       unawaited(tracer.flush());
     }
   }
+}
+
+/// The `device` and `os` contexts [TracerFlutter.initUi] read.
+final class _DeviceInfo {
+  const _DeviceInfo({this.device, this.os});
+  final Map<String, Object?>? device;
+  final Map<String, Object?>? os;
 }
 
 /// Navigation breadcrumbs (`navigation`, `push /board`, `{from, to}`).

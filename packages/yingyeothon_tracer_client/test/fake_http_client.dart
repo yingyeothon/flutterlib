@@ -71,6 +71,14 @@ final class FakeHttp extends http.BaseClient {
 
   void fail(Object error) => _answers.add(error);
 
+  /// [status] with [headers], answered [after] the request (an ingest that
+  /// read the body for that long first).
+  void answerAfter(
+    Duration after,
+    int status, [
+    Map<String, String> headers = const {},
+  ]) => _answers.add((after, status, headers));
+
   /// A `send` that never completes until its abort trigger fires.
   void stall() => _answers.add(#stall);
 
@@ -95,6 +103,14 @@ final class FakeHttp extends http.BaseClient {
         );
       }
       return done.future;
+    }
+    if (next is (Duration, int, Map<String, String>)) {
+      await Future<void>.delayed(next.$1);
+      return http.StreamedResponse(
+        Stream.value(utf8.encode('{"id":""}')),
+        next.$2,
+        headers: next.$3,
+      );
     }
     if (next is (int, Map<String, String>)) {
       return http.StreamedResponse(

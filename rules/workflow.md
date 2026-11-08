@@ -166,7 +166,9 @@ skipped from a session: stop, leave the tree uncommitted, and tell the user.**
   collector (service `docs/tracer.md`): `tracer_client` (pure Dart; DSN, envelope
   writer, buffering, transport, a `logger` sink) and `tracer_flutter`, the
   **first Flutter package** under `packages/` (setup per isolate, screenshot, view
-  hierarchy, lifecycle/navigation/error breadcrumbs, a debug-only report button).
+  hierarchy, lifecycle/navigation/error breadcrumbs, a debug-only report button;
+  since 2026-11-09, owner-directed, the device/OS contexts and the default
+  release through `device_info_plus` and `package_info_plus` — `flutter.md`).
   The dooroo Flutter apps and any yyt game depend on them. Fourteen packages now.
 - The gateway wire protocol is owned by the `service` repository. When it changes,
   this SDK follows it — never the other way round.

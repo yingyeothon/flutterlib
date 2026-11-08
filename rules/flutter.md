@@ -12,7 +12,7 @@ The libraries are engine-free; this file is about the app around them.
   owner decision. Otherwise: lifecycle, widgets,
   `debugPrint`, `url_launcher`, deep links, secure storage: all app code, and the
   example shows the wiring. A Flutter-only convenience goes in the example, not in a
-  package.
+  package — except `tracer_flutter`'s platform reads (below).
 - The example stays **outside** the pub workspace and depends on the packages by
   `path:`. Putting it in would make `dart pub get` and `dart test` at the root need
   the Flutter SDK (`tooling.md`).
@@ -53,6 +53,30 @@ The libraries are engine-free; this file is about the app around them.
 - `dart:io`'s `WebSocket.done` on a **server** socket does not complete after a
   client-initiated close; the stream's end does. The fake gateway and the transport
   tests read the stream for that reason.
+
+## Platform plugins in `yingyeothon_tracer_flutter`
+
+- `device_info_plus` and `package_info_plus` are its plugins (owner-directed
+  2026-11-09 for the device model and the default release). A further plugin,
+  here or in any package, needs an owner decision (`workflow.md`).
+- Their reads are asynchronous and cached per isolate until
+  `TracerFlutter.dispose`: `initUi` never waits, applies them when they arrive
+  (`platformReady` completes then), and a background isolate never calls them
+  (it may have no channel). Scope: device and OS on Android and iOS, the
+  release on every native platform, nothing on web, with `readPlatform: false`
+  or when the client is off. Precedence: a `device`/`os` key in `contexts` or a
+  non-empty `release` passed to `initUi` turns that read off; a late read
+  overwrites a `setContext`/`setRelease` made before it arrives.
+- Allow-list of what leaves the device — Android: `model`, `manufacturer`,
+  `brand`, `isPhysicalDevice`, `version.release`; iOS: `modelName`,
+  `utsname.machine`, `model`, `isPhysicalDevice`, `systemVersion`;
+  package_info: `packageName`, `version`, `buildNumber`. Anything else (the
+  user-set device name, ids, host, fingerprint, serial, signature, installer)
+  needs an owner decision; never spread a plugin's `data` map into a context.
+- iOS `modelName` is `Unknown device` for hardware missing from the plugin's
+  table (checked device_info_plus 13.3.0) and may be empty: use
+  `utsname.machine` then, and always as `model_id`. On a simulator `machine` is
+  the host architecture (`arm64`).
 
 ## Threads and frames
 

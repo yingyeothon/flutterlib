@@ -132,6 +132,11 @@
   exception: a zone name or a `dir` built from player input is peer data by the time it
   reaches the frame.
 
+## Device data
+
+- What `tracer_flutter` reads from the platform and sends is an allow-list in
+  `flutter.md` (_Platform plugins_); a field beyond it is an owner decision.
+
 ## What not to log
 
 - Never a receive buffer or a frame body. It is whatever the peer just sent. Log its

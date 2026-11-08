@@ -23,11 +23,35 @@ const Duration _defaultQuotaWait = Duration(seconds: 300);
 /// The longest `Retry-After` honoured.
 const Duration _maxRetryAfter = Duration(days: 1);
 
+/// Slow refusals of one envelope, with no other status between them, after
+/// which it is dropped as `send_failed` (`TracerStats.dropped`).
+const int _maxRefusals = 3;
+
+/// A `503` this long after the request started, or the request's own
+/// deadline passing after it, is a slow refusal: the ingest waits 10 s for
+/// the first body byte and then paces the body (its cut can come after the
+/// client's deadline on a slow link), while most of its other `503`s (busy,
+/// console, failure budget) answer before reading the body.
+const Duration _slowRefusalAfter = Duration(seconds: 10);
+
+/// Contexts kept besides the client's own; a new key past this is ignored.
+const int _maxContexts = 32;
+
+/// The longest `release` kept, in UTF-8 bytes (tracer keeps 200).
+const int _maxReleaseBytes = 200;
+
 final class _Queued {
   _Queued(this.body, this.kind);
   final Uint8List body;
   final String kind;
+
+  /// Slow refusals of this envelope since any other status.
+  int refusals = 0;
 }
+
+/// What [TracerClientImpl._send] decided: keep the envelope at the head of
+/// the queue or not, and how long the queue waits before the next send.
+typedef _Outcome = ({bool keep, Duration wait});
 
 /// The one [TracerClient] implementation.
 final class TracerClientImpl implements TracerClient {
@@ -38,7 +62,8 @@ final class TracerClientImpl implements TracerClient {
       _now = options.now ?? DateTime.now,
       _random = options.random ?? _secureRandom(),
       _tags = Map.fromEntries(options.tags.entries.take(TracerLimits.maxTags)),
-      _release = _nonEmpty(options.release),
+      _release = _releaseOf(options.release),
+      _extraContexts = _contextsOf(options.contexts),
       _dist = _nonEmpty(options.dist),
       _environment = _nonEmpty(options.environment),
       _userId = _nonEmpty(options.userId),
@@ -80,7 +105,8 @@ final class TracerClientImpl implements TracerClient {
   final DateTime Function() _now;
   final Random _random;
   final Map<String, String> _tags;
-  final String? _release;
+  String? _release;
+  final Map<String, Object?> _extraContexts;
   final String? _dist;
   final String? _environment;
   final String? _userId;
@@ -115,6 +141,24 @@ final class TracerClientImpl implements TracerClient {
   bool _inDiag = false;
 
   static String? _nonEmpty(String? v) => v == null || v.isEmpty ? null : v;
+
+  static String? _releaseOf(String? v) =>
+      v == null || v.isEmpty ? null : clipUtf8(v, _maxReleaseBytes);
+
+  /// The contexts an app may set: JSON-safe, each capped like `extra`,
+  /// without the client's own, at most [_maxContexts].
+  static Map<String, Object?> _contextsOf(Map<String, Object?> contexts) {
+    final out = <String, Object?>{};
+    for (final e in contexts.entries) {
+      final k = clipUtf8(e.key, 200);
+      if (_ownContexts.contains(k) || out.length >= _maxContexts) continue;
+      final safe = _capData(jsonSafe(e.value));
+      if (safe is Map<String, Object?>) out[k] = safe;
+    }
+    return out;
+  }
+
+  static const _ownContexts = {'trace', 'feedback'};
 
   static Random _secureRandom() {
     try {
@@ -192,6 +236,29 @@ final class TracerClientImpl implements TracerClient {
         _tags[k] = clipUtf8(value, 200);
       }
     });
+  }
+
+  @override
+  void setContext(String key, Map<String, Object?>? value) {
+    _guard(() {
+      final k = clipUtf8(key, 200);
+      if (_ownContexts.contains(k)) return;
+      if (value == null) {
+        _extraContexts.remove(k);
+        return;
+      }
+      if (!_extraContexts.containsKey(k) &&
+          _extraContexts.length >= _maxContexts) {
+        return;
+      }
+      final safe = _capData(jsonSafe(value));
+      if (safe is Map<String, Object?>) _extraContexts[k] = safe;
+    });
+  }
+
+  @override
+  void setRelease(String? release) {
+    _guard(() => _release = _releaseOf(release));
   }
 
   @override
@@ -282,7 +349,7 @@ final class TracerClientImpl implements TracerClient {
 
   Map<String, Object?> _baseAttributes() {
     Map<String, Object?> str(String v) => {'value': v, 'type': 'string'};
-    final device = _options.contexts['device'];
+    final device = _extraContexts['device'];
     final model = device is Map ? device['model'] : null;
     return {
       'sentry.sdk.name': str(sdkInfo['name']!),
@@ -316,11 +383,8 @@ final class TracerClientImpl implements TracerClient {
   };
 
   Map<String, Object?> _contexts(Map<String, Object?> own) {
-    final extra = jsonSafe(_options.contexts);
     return {
-      if (extra is Map<String, Object?>)
-        for (final e in extra.entries)
-          if (e.key != 'trace' && e.key != 'feedback') e.key: e.value,
+      ..._extraContexts,
       'trace': {'trace_id': traceId, 'span_id': hexId(_random, 8)},
       ...own,
     };
@@ -567,13 +631,13 @@ final class TracerClientImpl implements TracerClient {
       while (_queue.isNotEmpty && !_paused && _state == TracerState.active) {
         final next = _queue.removeFirst();
         _queuedBytes -= next.body.length;
-        final retry = await _send(next);
-        if (retry != null) {
+        final outcome = await _send(next);
+        if (outcome.keep) {
           _queue.addFirst(next);
           _queuedBytes += next.body.length;
           _trimQueue();
-          if (retry > Duration.zero) _pause(retry);
         }
+        if (outcome.wait > Duration.zero) _pause(outcome.wait);
       }
     } on Object catch (error) {
       _drop('internal');
@@ -614,9 +678,13 @@ final class TracerClientImpl implements TracerClient {
     return wait > _maxRetryAfter ? _maxRetryAfter : wait;
   }
 
-  /// Sends one envelope. Returns null when it is done with (sent or
-  /// dropped), else how long to wait before trying it again (zero: now).
-  Future<Duration?> _send(_Queued item) async {
+  static const _Outcome _done = (keep: false, wait: Duration.zero);
+
+  static _Outcome _retry(Duration wait) => (keep: true, wait: wait);
+
+  /// Sends one envelope: whether it stays at the head of the queue (not
+  /// sent, not dropped) and how long the queue waits (zero: not at all).
+  Future<_Outcome> _send(_Queued item) async {
     final dsn = _dsn!;
     final abort = _abort = Completer<void>();
     final compress = _compress;
@@ -633,6 +701,8 @@ final class TracerClientImpl implements TracerClient {
     if (compress) request.headers['content-encoding'] = 'gzip';
     int status;
     String? retryAfter;
+    var slow = false;
+    final slowTimer = Timer(_slowRefusalAfter, () => slow = true);
     try {
       final response = await _exchange(
         request,
@@ -643,17 +713,26 @@ final class TracerClientImpl implements TracerClient {
       if (!abort.isCompleted) abort.complete();
       if (_state != TracerState.active) {
         _drop('closed');
-        return null;
+        return _done;
       }
+      // The deadline passing is the client's own slow refusal; any other
+      // error is not an answer: the count neither grows nor restarts, so a
+      // link that alternates resets and slow refusals still gives up.
+      if (error is TimeoutException && slow) item.refusals++;
       final wait = _backoff();
+      if (item.refusals >= _maxRefusals) {
+        _dropRefused(item, 0);
+        return (keep: false, wait: wait);
+      }
       _diag(LogSeverity.debug, 'tracer send failed', {
         'type': error.runtimeType.toString(),
         'kind': item.kind,
         'retryMs': wait.inMilliseconds,
       });
-      return wait;
+      return _retry(wait);
     } finally {
       _abort = null;
+      slowTimer.cancel();
     }
     if (!abort.isCompleted) abort.complete();
     _diag(LogSeverity.debug, 'tracer envelope', {
@@ -664,7 +743,14 @@ final class TracerClientImpl implements TracerClient {
     if (status >= 200 && status < 300) {
       _sent++;
       _failures = 0;
-      return null;
+      return _done;
+    }
+    // A quick 503 (busy, disk, console, failure budget) says nothing about
+    // this envelope: it neither counts nor restarts the count.
+    if (status == 503 && slow) {
+      item.refusals++;
+    } else if (status != 503) {
+      item.refusals = 0;
     }
     switch (status) {
       case 401:
@@ -672,27 +758,42 @@ final class TracerClientImpl implements TracerClient {
         _drop('unauthorized', 1 + _queue.length);
         _queue.clear();
         _queuedBytes = 0;
-        return null;
+        return _done;
       case 429:
-        return _retryAfter(retryAfter) ?? _defaultQuotaWait;
+        return _retry(_retryAfter(retryAfter) ?? _defaultQuotaWait);
       case 400:
         _drop('invalid');
-        return null;
+        return _done;
       case 413:
         _drop('too_large');
-        return null;
+        return _done;
       case 415 when compress:
         _compress = false;
-        return Duration.zero;
+        return _retry(Duration.zero);
       case 415:
         _drop('encoding');
-        return null;
+        return _done;
       case >= 500:
-        return _retryAfter(retryAfter) ?? _backoff();
+        final wait = _retryAfter(retryAfter) ?? _backoff();
+        if (item.refusals < _maxRefusals) return _retry(wait);
+        // The ingest cut this body for being too slow again and again (an
+        // oversized report on a bad link): give it up so newer envelopes
+        // get through, and still wait as told.
+        _dropRefused(item, status);
+        return (keep: false, wait: wait);
       default:
         _drop('http_$status');
-        return null;
+        return _done;
     }
+  }
+
+  void _dropRefused(_Queued item, int status) {
+    _drop('send_failed');
+    _diag(LogSeverity.warn, 'tracer envelope dropped after refusals', {
+      'kind': item.kind,
+      'status': status,
+      'bytes': item.body.length,
+    });
   }
 
   Future<(int, String?)> _exchange(http.BaseRequest request) async {

@@ -106,6 +106,24 @@
   items with `length` and a trailing newline); `test/support.dart` has
   `SequenceRandom` (ids count up, fixed jitter) and `steppingClock` (1 ms per read),
   so ids, timestamps and back-off times are exact under `fakeAsync`.
+  `answerAfter(duration, status[, headers])` answers late, under `fakeAsync`
+  only (it is a `Future.delayed`); the slow-refusal rule (a `503`, or the
+  deadline, 10 s or more into the request) is pinned from both sides with it.
+- `tracer_flutter` platform reads are faked through the plugins' own seams
+  (`platform_test.dart`): `DeviceInfoPlatform.instance = <subclass>` answering
+  the method channel's map (dev-dependency `device_info_plus_platform_interface`;
+  bump it with `device_info_plus`), and `PackageInfo.setMockInitialValues`.
+  Both stay set for the rest of the file, and tracer_flutter caches its reads
+  per isolate: end every test that called `initUi` with `await
+  TracerFlutter.dispose()`. Await `TracerFlutter.platformReady` (or one
+  `tester.pump()` with these synchronous fakes) before asserting device, OS or
+  release, and pin the event written before it without them. Fill every
+  identifying field of a fake with a `secret` marker (any case) and assert the
+  decoded envelopes contain none, case-insensitively, after a positive control.
+  `debugDefaultTargetPlatformOverride` picks the branch (Android by default
+  under `flutter_test`): set it back to null as the body's last statement —
+  `testWidgets` checks foundation debug variables before `tearDown` — and in
+  `tearDown` too, for a failed test.
 - **The tracer golden is shared with the service.**
   `tracer_client/test/golden/report.envelope` is byte-identical to the service's
   `tracer/testdata/envelopes/yyt-dart/report.envelope`. A change to what the client

@@ -18,7 +18,10 @@ client libraries_); this page is the app side.
 ## What leaves the device, and when
 
 Breadcrumbs stay on the device in a ring of 500 until a report sends them; log lines
-are the continuous timeline, sent in batches. A step you want in both calls `trace`.
+are the continuous timeline, sent in batches. Once `initUi` has read the platform,
+events also carry the app's release and the OS name, and on Android and iOS the OS
+version, the device model, manufacturer, brand and whether it is an emulator (the
+model goes on log lines too); never the user-set device name or a device id. A step you want in both calls `trace`.
 A report sends the ring, the batched lines and the screenshot at once, then the note
 follows as feedback:
 
@@ -60,12 +63,20 @@ report can check out the exact code.
 import 'package:yingyeothon_tracer_flutter/yingyeothon_tracer_flutter.dart';
 
 void main() {
-  TracerFlutter.initUi(release: 'myapp@1.4.0+12');
+  TracerFlutter.initUi(); // release: <packageName>@<version>+<buildNumber>
   runApp(TracerScreenshot(
     child: MaterialApp(navigatorObservers: [TracerNavigatorObserver()], home: const Home()),
   ));
 }
 ```
+
+Without a `release` it reports the app's own `<packageName>@<version>+<buildNumber>`
+(pass yours if your builds name releases another way), and on Android and iOS
+events and log lines name the device model and events the OS version
+(`yyt tracer events` shows the model under DEVICE; `yyt tracer event` shows both).
+Both are read in the background, so what is written in the first moments after
+start-up goes without them; desktop builds have no device model, and
+`readPlatform: false` turns the read off.
 
 In a background isolate (a BLE worker, a downloader) call
 `TracerFlutter.initBackground(isolate: 'ble')` first thing; each isolate has its own
@@ -118,6 +129,7 @@ The client never throws and never blocks; it waits or drops and counts in
 | `401` | stops (`TracerState.stopped`) and drops the queue | the key was rotated (`yyt tracer rotate-key`) or the DSN is for another stage: rebuild with the new DSN |
 | `429` | waits `Retry-After`, then resends | the resource's daily quota: ask for more with `yyt limit request --tracer <res> tracer.dailyBytes +50MiB` |
 | `503` | waits `Retry-After`, else backs off 1 s → 5 min | tracer is busy, its disk is full, or your address failed too often |
+| `503` 10 s or more into the request, or no answer by the request's deadline | the same, and the third in a row for one envelope drops it (`send_failed`) | the body arrived too slowly (a large report on a bad link), or tracer failed after a long upload |
 | `413`, `400` | drops the envelope (`too_large`, `invalid`) | an envelope over tracer's caps or malformed; the client splits before the caps, so report it |
 | no network | backs off and keeps up to 32 envelopes / 48 MiB | offline; the oldest envelope is dropped past that (`queue_full`) |
 

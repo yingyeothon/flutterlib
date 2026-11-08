@@ -138,7 +138,13 @@ final class TracerStats {
 
   /// Things the client gave up on, by reason: `too_large` (`413`, or split
   /// past a limit), `invalid` (`400`), `encoding` (`415`), `unauthorized`
-  /// (`401`), `queue_full` (the oldest envelope made room), `http_<status>`,
+  /// (`401`), `send_failed` (one envelope refused slowly three times with
+  /// no other status between them — a `503` at least 10 s into the request,
+  /// which is tracer cutting a body that arrives too slowly or failing
+  /// after a long upload, or the request's own deadline passing after 10 s
+  /// — so an oversized report on a bad link cannot hold the queue; a
+  /// quicker `503` or another network error neither counts nor restarts the
+  /// count), `queue_full` (the oldest envelope made room), `http_<status>`,
   /// `internal`, `closed`.
   final Map<String, int> dropped;
 }
@@ -172,7 +178,9 @@ final class TracerOptions {
   /// build define; never committed. Empty means off.
   final String dsn;
 
-  /// `version+build` of the app.
+  /// The app's release, such as `myapp@1.4.0+12` (Sentry's
+  /// `package@version+build`); kept to 200 bytes. [TracerClient.setRelease]
+  /// changes it.
   final String? release;
 
   /// A build discriminator; a git sha lets a reader check out the code.
@@ -189,7 +197,9 @@ final class TracerOptions {
   final String? userId;
 
   /// Extra event `contexts` (`device`, `os`, `app`, …); `trace` and
-  /// `feedback` are the client's own.
+  /// `feedback` are the client's own. Each is kept to 16 KiB of JSON (else
+  /// `{"tracer.truncated": true}`), and 32 of them. `device.model` also goes
+  /// on every log line. [TracerClient.setContext] changes them later.
   final Map<String, Object?> contexts;
 
   /// Injected HTTP client; never closed by the tracer client.
@@ -224,7 +234,9 @@ final class TracerOptions {
   final int maxQueuedBytes;
 
   /// Deadline of one request, headers and body, plus one second per 64 KiB
-  /// of body so a large report can finish on a slow link.
+  /// of body so a large report can finish on a slow link. A deadline that
+  /// passes 10 s or more into a request counts toward `send_failed`
+  /// ([TracerStats.dropped]).
   final Duration timeout;
 
   /// Whether bodies are gzipped (native platforms only; web sends them
@@ -262,6 +274,18 @@ abstract interface class TracerClient {
   /// Adds a tag to later events and log lines; a null [value] removes it.
   /// Past [TracerLimits.maxTags] a new key is ignored.
   void setTag(String key, String? value);
+
+  /// Sets the event context [key] (`device`, `os`, `app`, …) for later
+  /// events, replacing [TracerOptions.contexts]' entry; a null [value]
+  /// removes it. `trace` and `feedback` are the client's own and ignored;
+  /// past 32 contexts a new key is ignored; a value over 16 KiB of JSON
+  /// becomes `{"tracer.truncated": true}`. `device.model` also goes on log
+  /// lines written later.
+  void setContext(String key, Map<String, Object?>? value);
+
+  /// Sets the `release` of events and log lines written later (kept to 200
+  /// bytes); null or empty clears it.
+  void setRelease(String? release);
 
   /// Remembers a step for the next report. Breadcrumbs leave the device only
   /// inside an event.

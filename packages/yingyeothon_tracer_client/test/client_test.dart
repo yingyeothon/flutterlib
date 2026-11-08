@@ -700,6 +700,135 @@ void main() {
     });
   });
 
+  test('setContext and setRelease change later events and log lines', () {
+    fakeAsync((async) {
+      final http = FakeHttp();
+      final c = TracerClient(
+        TracerOptions(
+          dsn: fixtureDsn,
+          client: http,
+          release: 'given@1',
+          contexts: const {
+            'os': {'name': 'Android'},
+            'trace': {'trace_id': 'not mine'},
+          },
+          logBatchSize: 1,
+        ),
+      );
+      Map<String, Object?> lastEvent() =>
+          http.sent.last.parsed.items.first.json;
+      Map<Object?, Object?> lastLine() =>
+          (http.sent.last.parsed.items.single.json['items']! as List).single
+              as Map;
+
+      c.report('before');
+      async.flushMicrotasks();
+      final before = lastEvent();
+      expect(before['release'], 'given@1');
+      expect((before['contexts']! as Map).keys, {'os', 'trace'});
+      expect(
+        ((before['contexts']! as Map)['trace'] as Map)['trace_id'],
+        c.traceId,
+      );
+      c.log(TracerLevel.info, 'line before');
+      async.flushMicrotasks();
+      expect(
+        (lastLine()['attributes'] as Map).containsKey('device.model'),
+        isFalse,
+      );
+
+      c
+        ..setContext('device', {'model': 'Pixel 9', 'manufacturer': 'Google'})
+        ..setContext('os', {'name': 'Android', 'version': '15'})
+        ..setContext('trace', {'trace_id': 'ignored'})
+        ..setContext('feedback', {'message': 'ignored'})
+        ..setRelease('app@1.2.3+4');
+      c.report('after');
+      async.flushMicrotasks();
+      final after = lastEvent();
+      expect(after['release'], 'app@1.2.3+4');
+      final contexts = after['contexts']! as Map;
+      expect(contexts['device'], {
+        'model': 'Pixel 9',
+        'manufacturer': 'Google',
+      });
+      expect(contexts['os'], {'name': 'Android', 'version': '15'});
+      expect((contexts['trace'] as Map)['trace_id'], c.traceId);
+      expect(contexts.containsKey('feedback'), isFalse);
+      c.log(TracerLevel.info, 'line after');
+      async.flushMicrotasks();
+      final attrs = lastLine()['attributes'] as Map;
+      expect(attrs['device.model'], {'value': 'Pixel 9', 'type': 'string'});
+      expect(attrs['sentry.release'], {
+        'value': 'app@1.2.3+4',
+        'type': 'string',
+      });
+
+      c
+        ..setContext('device', null)
+        ..setContext('os', {for (final k in 'abc'.split('')) k: 'x' * 8000})
+        ..setRelease('');
+      c.report('cleared');
+      async.flushMicrotasks();
+      final cleared = lastEvent();
+      expect(cleared.containsKey('release'), isFalse);
+      expect((cleared['contexts']! as Map)['os'], {'tracer.truncated': true});
+      expect((cleared['contexts']! as Map).containsKey('device'), isFalse);
+      c.log(TracerLevel.info, 'line cleared');
+      async.flushMicrotasks();
+      final cut = lastLine()['attributes'] as Map;
+      expect(cut.containsKey('device.model'), isFalse);
+      expect(cut.containsKey('sentry.release'), isFalse);
+      expect(c.stats.dropped, isEmpty);
+    });
+  });
+
+  test('contexts stop at 32 and 16 KiB each; release at 200 bytes', () {
+    fakeAsync((async) {
+      final http = FakeHttp();
+      final big = {for (final k in 'abc'.split('')) k: 'x' * 8000};
+      final c = TracerClient(
+        TracerOptions(
+          dsn: fixtureDsn,
+          client: http,
+          release: 'r' * 300,
+          contexts: {
+            'big': big,
+            for (var i = 0; i < 40; i++) 'c$i': {'i': i},
+          },
+        ),
+      );
+      c
+        ..setContext('late', {'v': 1})
+        ..setContext('c0', {'replaced': true});
+      c.report('r');
+      async.flushMicrotasks();
+      final e = http.sent.single.parsed.items.first.json;
+      final contexts = e['contexts']! as Map;
+      // 32 of the app's own, then the client's trace.
+      expect(contexts.length, 33);
+      expect(contexts['big'], {'tracer.truncated': true});
+      expect(contexts['c0'], {'replaced': true});
+      expect(contexts.containsKey('c30'), isTrue);
+      expect(contexts.containsKey('c31'), isFalse);
+      expect(contexts.containsKey('late'), isFalse);
+      expect(e['release'], 'r' * 200);
+      c.setRelease('s' * 201);
+      c.report('r2');
+      async.flushMicrotasks();
+      expect(http.sent.last.parsed.items.first.json['release'], 's' * 200);
+    });
+  });
+
+  test('setContext and setRelease on an off client do nothing', () {
+    final c = TracerClient(const TracerOptions(dsn: ''));
+    c
+      ..setContext('device', {'model': 'm'})
+      ..setRelease('r');
+    expect(c.state, TracerState.off);
+    expect(c.stats.dropped, isEmpty);
+  });
+
   test('an event that cannot fit is not sent, so no orphan attachments', () {
     fakeAsync((async) {
       final http = FakeHttp();
@@ -707,9 +836,8 @@ void main() {
         TracerOptions(
           dsn: fixtureDsn,
           client: http,
-          contexts: {
-            for (var i = 0; i < 200; i++) 'c$i': {'v': 'q' * 8000},
-          },
+          // Contexts are bounded (32 × 16 KiB); an id is not.
+          userId: 'u' * (1100 * 1024),
         ),
       );
       String? id = 'unset';

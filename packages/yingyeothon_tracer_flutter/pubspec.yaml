@@ -10,14 +10,17 @@ environment:
   sdk: ^3.13.0
   flutter: ">=3.47.0"
 dependencies:
+  device_info_plus: ^13.3.0
   flutter:
     sdk: flutter
   http: ^1.6.0
+  package_info_plus: ^10.2.2
   yingyeothon_logger:
     path: ../yingyeothon_logger
   yingyeothon_tracer_client:
     path: ../yingyeothon_tracer_client
 dev_dependencies:
+  device_info_plus_platform_interface: ^8.1.0
   flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter

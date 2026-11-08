@@ -36,6 +36,9 @@ Depend on this package only: it re-exports the core (`Tracer`, `TracerLevel`, �
 Listing `yingyeothon_tracer_client` beside it on the same `ref:` fails version
 solving (v0.3.0 documented that; use v0.3.1 or later).
 
+Since v0.3.2 it depends on `device_info_plus` (13.x) and `package_info_plus`
+(10.x), so the app inherits their floors: Android `minSdk` 21 and iOS 12. They are linked into release builds too, where tracer stays off.
+
 ## Usage
 
 ```dart
@@ -44,7 +47,8 @@ import 'package:yingyeothon_tracer_flutter/yingyeothon_tracer_flutter.dart';
 
 void main() {
   // TRACER_DSN and GIT_SHA from --dart-define; off when TRACER_DSN is absent.
-  TracerFlutter.initUi(release: 'myapp@1.4.0+12');
+  // The release defaults to <packageName>@<version>+<buildNumber>.
+  TracerFlutter.initUi();
   runApp(
     TracerScreenshot(
       child: MaterialApp(
@@ -69,8 +73,24 @@ committed.
 - `TracerFlutter.initUi` makes the client `Tracer.current` — off in a release
   build unless `enableInRelease: true`, even if a DSN was compiled in — tags it `isolate: ui`
   and `git_sha`, uses the sha as `dist` (unless you pass one), sets `environment:
-  debug` in a debug build and `contexts.os.name`, and allows `http` to a loopback
-  host only in a debug build. It chains `FlutterError.onError` and
+  debug` in a debug build and `contexts.os.name` (`Android`, `iOS`, `Linux`, …;
+  before v0.3.2 the lower-case `TargetPlatform` name), and allows `http` to a
+  loopback host only in a debug build. It returns at once and, unless
+  `readPlatform: false`, reads the platform in the background, once per
+  isolate, through `device_info_plus` and `package_info_plus`: on Android and
+  iOS `contexts.device` (`model`, `manufacturer`, `brand`, `family`,
+  `simulator`; on iOS the marketing name as `model`, or the hardware id when
+  the plugin does not know the device, and the hardware id as `model_id`) and
+  `contexts.os` (`name`, `version`); on every native platform, when you pass no
+  `release`, `<packageName>@<version>+<buildNumber>` — the application id or
+  bundle id on mobile, so pass your own `release` if your builds use another
+  scheme. A `device` or `os` you pass in `contexts` wins. The user-set device
+  name, device ids, hosts and build fingerprints are never sent. What a
+  platform cannot answer stays out, and what is written before the answer
+  arrives goes without it (`TracerFlutter.platformReady` completes once it is
+  applied — a debug cold start on an emulator took 4 s); a
+  `setContext('device', …)` or `setRelease` made before the answer is
+  overwritten by it, so pass those to `initUi`. It chains `FlutterError.onError` and
   `PlatformDispatcher.onError` — each error becomes a breadcrumb with its text
   (which leaves the device only inside a report) and a log line with its type
   only, then the previous handler runs (or `FlutterError.presentError` when there
@@ -82,9 +102,13 @@ committed.
   (with the first enabled call's `captureErrors` and `lifecycle`).
 - `TracerFlutter.initBackground` builds a plain client for a background isolate,
   tagged `isolate: bg` (or yours). Each isolate has its own client and ring;
-  `close()` it before the isolate ends, or its buffered lines are lost.
+  `close()` it before the isolate ends, or its buffered lines are lost. It reads
+  no platform plugin (a background isolate may have no channel to one), so pass
+  `release` and a `device` context in `contexts` yourself — values the UI
+  isolate sends it, say — if that isolate's lines should carry them.
 - `TracerFlutter.dispose` restores the replaced handlers where its own are still
-  installed (a crash reporter's later handler stays) and closes the client.
+  installed (a crash reporter's later handler stays), forgets the platform reads
+  and closes the client.
 - `TracerScreenshot` wraps the app **once** (its key is global); `capture()`
   returns a PNG (pixel ratio 1) or null, `viewHierarchy()` the widget tree as
   Sentry's view-hierarchy JSON (type, depth, the key's type, position, size; no
@@ -122,7 +146,8 @@ lifecycle hook (`lifecycle: false`) if you mirror.
 
 ## Public API
 
-- `TracerFlutter` (`initUi`, `initBackground`, `dispose`), `TracerDefines` (`dsn`,
+- `TracerFlutter` (`initUi`, `initBackground`, `dispose`, `platformReady`),
+  `TracerDefines` (`dsn`,
   `gitSha`).
 - `TracerScreenshot` (`capture`, `viewHierarchy`), `TracerNavigatorObserver`,
   `TracerReportButton` (`reportThis`).

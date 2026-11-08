@@ -31,8 +31,13 @@ class _TracerScreenState extends State<TracerScreen> {
   }
 
   Future<void> _autostart() async {
-    // Let the push transition finish, so the screenshot shows this screen.
+    // Let the push transition finish, so the screenshot shows this screen,
+    // and let the device model and release arrive, so the report names them.
     await Future<void>.delayed(const Duration(seconds: 1));
+    await TracerFlutter.platformReady.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {},
+    );
     if (!mounted || !_tracer.enabled) return;
     _step();
     _warn();

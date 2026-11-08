@@ -122,7 +122,7 @@ void main() {
     expect(event['dist'], 'abc1234');
     expect(event['release'], 'app@1.0.0+1');
     expect(event['environment'], 'debug');
-    expect((event['contexts']! as Map)['os'], {'name': 'android'});
+    expect((event['contexts']! as Map)['os'], {'name': 'Android'});
     expect(crumbs(event), [
       'flutter.error:Bad state: boom',
       'platform.error:Invalid argument(s): x',

@@ -15,8 +15,9 @@ import 'session.dart';
 
 void main() {
   // Off unless the build passed --dart-define=TRACER_DSN=…; GIT_SHA, when
-  // given, becomes the git_sha tag and the dist. Off in a release build.
-  TracerFlutter.initUi(release: 'yyt_playground@0.1.0');
+  // given, becomes the git_sha tag and the dist. Off in a release build. The
+  // release is the package's own <packageName>@<version>+<buildNumber>.
+  TracerFlutter.initUi();
   runApp(PlaygroundApp(session: Session()));
 }
 

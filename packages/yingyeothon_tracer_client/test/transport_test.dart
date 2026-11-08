@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:fake_async/fake_async.dart';
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
+import 'package:yingyeothon_logger/yingyeothon_logger.dart';
 import 'package:yingyeothon_tracer_client/yingyeothon_tracer_client.dart';
 
 import 'fake_http_client.dart';
@@ -149,6 +150,197 @@ void main() {
     });
   });
 
+  const slow = Duration(seconds: 10);
+  const ra60 = {'retry-after': '60'};
+
+  test('three slow 503s in a row drop the envelope, waiting as told', () {
+    fakeAsync((async) {
+      final http = FakeHttp()
+        ..answerAfter(slow, 503, ra60)
+        ..answerAfter(slow, 503, ra60)
+        ..answerAfter(slow, 503, ra60)
+        ..answerAfter(slow, 503, ra60)
+        ..answer(503);
+      final log = CapturingLogWriter();
+      final c = makeClient(
+        http,
+        logger: createFilteredLogger(severity: LogSeverity.debug, writer: log),
+      );
+      c.report('slow');
+      async.flushMicrotasks();
+      c.report('next');
+      // Sends at 0, 70 and 140 s; each answer 10 s later, then 60 s.
+      async.elapse(const Duration(seconds: 149));
+      expect(http.sent, hasLength(3));
+      expect(c.stats.dropped, isEmpty);
+      async.elapse(const Duration(seconds: 1));
+      expect(
+        http.sent.map((s) => s.parsed.items.single.json['message']).toSet(),
+        {'slow'},
+      );
+      expect(c.stats.dropped, {'send_failed': 1});
+      expect(c.stats.queued, 1);
+      // Dropped, yet the queue still waits Retry-After.
+      async.elapse(const Duration(seconds: 59));
+      expect(http.sent, hasLength(3));
+      async.elapse(const Duration(seconds: 1));
+      expect(http.sent, hasLength(4));
+      expect(http.sent.last.parsed.items.single.json['message'], 'next');
+      // The next envelope starts its own count: one slow 503 keeps it.
+      async.elapse(const Duration(seconds: 70));
+      expect(http.sent, hasLength(5));
+      expect(c.stats.dropped, {'send_failed': 1});
+      async.elapse(const Duration(seconds: 5));
+      expect(c.stats.envelopesSent, 1);
+      expect(c.stats.queued, 0);
+      expect(
+        log.lines,
+        contains(
+          LogWriters.format(
+            LogSeverity.warn,
+            'tracer envelope dropped after refusals',
+            {'kind': 'event', 'status': 503, 'bytes': http.sent[0].body.length},
+          ),
+        ),
+      );
+      expect(async.pendingTimers, isEmpty);
+    });
+  });
+
+  test('a 503 just under 10 s is not a slow refusal; at 10 s it is', () {
+    fakeAsync((async) {
+      const quick = Duration(milliseconds: 9999);
+      final http = FakeHttp();
+      for (var i = 0; i < 6; i++) {
+        http.answerAfter(quick, 503, ra60);
+      }
+      final c = makeClient(http);
+      c.report('a');
+      async.elapse(const Duration(minutes: 30));
+      expect(http.sent, hasLength(7));
+      expect(c.stats.dropped, isEmpty);
+      expect(c.stats.envelopesSent, 1);
+    });
+  });
+
+  test('quick 503s without Retry-After (busy, disk) never drop', () {
+    fakeAsync((async) {
+      final http = FakeHttp();
+      for (var i = 0; i < 6; i++) {
+        http.answer(503);
+      }
+      final c = makeClient(http);
+      c.report('a');
+      async.elapse(const Duration(minutes: 30));
+      expect(http.sent, hasLength(7));
+      expect(c.stats.dropped, isEmpty);
+      expect(c.stats.envelopesSent, 1);
+    });
+  });
+
+  test('another status restarts the count; a quick 503 does not', () {
+    fakeAsync((async) {
+      final http = FakeHttp()
+        ..answerAfter(slow, 503)
+        ..answerAfter(slow, 503)
+        ..answer(429, {'retry-after': '1'})
+        ..answerAfter(slow, 503)
+        ..answer(503)
+        ..answerAfter(slow, 503)
+        ..answer(502)
+        ..answerAfter(slow, 503)
+        ..answerAfter(slow, 503)
+        ..answer(503)
+        ..answerAfter(slow, 503);
+      final c = makeClient(http);
+      c.report('a');
+      async.elapse(const Duration(minutes: 30));
+      // 429 and 502 restart; the quick 503s between neither count nor
+      // restart, so the last three slow ones drop it.
+      expect(http.sent, hasLength(11));
+      expect(c.stats.dropped, {'send_failed': 1});
+      expect(c.stats.envelopesSent, 0);
+    });
+  });
+
+  test('a network error between slow 503s neither counts nor restarts', () {
+    fakeAsync((async) {
+      final http = FakeHttp()
+        ..answerAfter(slow, 503)
+        ..fail(const SocketException('reset'))
+        ..answerAfter(slow, 503)
+        ..fail(const SocketException('reset'))
+        ..fail(const SocketException('reset'))
+        ..answerAfter(slow, 503);
+      final c = makeClient(http);
+      c.report('a');
+      async.elapse(const Duration(minutes: 30));
+      expect(http.sent, hasLength(6));
+      expect(c.stats.dropped, {'send_failed': 1});
+      expect(c.stats.envelopesSent, 0);
+      expect(c.stats.queued, 0);
+    });
+  });
+
+  test('the deadline passing counts as a slow refusal', () {
+    fakeAsync((async) {
+      final http = FakeHttp()
+        ..stall()
+        ..answerAfter(slow, 503)
+        ..stall();
+      final c = makeClient(http);
+      c.report('a');
+      async.elapse(const Duration(minutes: 5));
+      expect(http.sent, hasLength(3));
+      expect(c.stats.dropped, {'send_failed': 1});
+      expect(c.stats.queued, 0);
+      expect(async.pendingTimers, isEmpty);
+    });
+  });
+
+  test('a deadline under 10 s never counts', () {
+    fakeAsync((async) {
+      final http = FakeHttp();
+      for (var i = 0; i < 4; i++) {
+        http.stall();
+      }
+      final c = TracerClient(
+        TracerOptions(
+          dsn: fixtureDsn,
+          client: http,
+          random: SequenceRandom(),
+          timeout: const Duration(seconds: 5),
+        ),
+      );
+      c.report('a');
+      async.elapse(const Duration(minutes: 5));
+      expect(http.sent, hasLength(5));
+      expect(c.stats.dropped, isEmpty);
+      expect(c.stats.envelopesSent, 1);
+    });
+  });
+
+  test('the refusal count is per envelope', () {
+    fakeAsync((async) {
+      final http = FakeHttp()
+        ..answerAfter(slow, 503)
+        ..answerAfter(slow, 503)
+        ..answerAfter(slow, 503)
+        ..answerAfter(slow, 503)
+        ..answerAfter(slow, 503);
+      final c = makeClient(http);
+      c
+        ..report('a')
+        ..report('b');
+      async.elapse(const Duration(minutes: 30));
+      // a: three slow 503s, dropped; b: two, then 200.
+      expect(http.sent, hasLength(6));
+      expect(c.stats.dropped, {'send_failed': 1});
+      expect(c.stats.envelopesSent, 1);
+      expect(http.sent.last.parsed.items.single.json['message'], 'b');
+    });
+  });
+
   test('jitter edges: 0 gives half the delay, 0.999999 nearly all', () {
     for (final (jitter, before) in [(0.0, 499), (0.999999, 999)]) {
       fakeAsync((async) {
@@ -165,8 +357,9 @@ void main() {
   test('the back-off stops growing at five minutes', () {
     fakeAsync((async) {
       final http = FakeHttp();
+      // 502 (a proxy with the ingest down) never drops the envelope.
       for (var i = 0; i < 12; i++) {
-        http.answer(503);
+        http.answer(502);
       }
       // Nearly full jitter: 1 + 2 + … + 256 s, then 300 s three times.
       makeClient(http, jitter: 0.999999).report('a');

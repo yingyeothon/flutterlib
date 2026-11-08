@@ -20,7 +20,7 @@ flowchart LR
   fb["feedback()"] --> env
   env --> q["bounded queue"]
   q --> ingest["POST /api/trc/envelope/"]
-  ingest -- "429, 503: wait" --> q
+  ingest -- "429, 5xx: wait" --> q
 ```
 
 ## Install
@@ -34,8 +34,8 @@ dependencies:
       ref: v0.3.1
 ```
 
-The package is on main, pending an owner-cut release. The snippet names the
-existing release; it does not claim that tag contains the new package.
+A Flutter app depends on `yingyeothon_tracer_flutter` instead, which re-exports
+this package.
 
 ## Usage
 
@@ -80,7 +80,11 @@ libraries_; tracer's `tracer/internal/` is the reference implementation.
 - **Log lines** carry typed attributes (`string`, `integer`, `double`, `boolean`;
   anything else is sent as its JSON text) plus `sentry.release`,
   `sentry.environment`, `sentry.dist`, `user.id`, `device.model` (from
-  `contexts.device.model`) and the tags, so tracer can filter them. tracer keeps a
+  `contexts.device.model`) and the tags, so tracer can filter them. `setContext`
+  and `setRelease` change the contexts and the `release` of what is written after
+  them, for values an app learns only after start-up (a device model read through
+  a plugin); contexts stop at 32, each at 16 KiB of JSON, and `release` at 200
+  bytes. tracer keeps a
   line's attributes only up to 16 KiB of JSON, so the client adds yours while they
   fit and marks the line `tracer.truncated`; a breadcrumb's `data` or a report's
   `extra` over 16 KiB becomes `{"tracer.truncated": true}`, and tags stop at 64. An
@@ -95,7 +99,16 @@ libraries_; tracer's `tracer/internal/` is the reference implementation.
 - **Responses.** `200` sent; `401` stops the client (`TracerState.stopped`) until the
   app builds a new one with a new DSN; `429` waits `Retry-After` (300 s without
   one, or `0`), never less; `503`, other `5xx` and network errors wait
-  `Retry-After` or a jittered back-off (1 s doubling to 5 min); `400`, `413` and
+  `Retry-After` or a jittered back-off (1 s doubling to 5 min). Most of tracer's
+  `503`s (busy, console, an address over its failure budget) answer before
+  reading the body; the one for a body that arrives too slowly comes 10 s or
+  more into the request, and on a slow link the client's own deadline may pass
+  first. The third such slow refusal for one envelope — a `503` or the deadline,
+  10 s or more in, with no other status between (a quick `503` or another
+  network error neither counts nor restarts the count) — drops it as
+  `send_failed`, so an oversized report on a bad link cannot hold the queue
+  (a disk or store failure after a long upload counts too), and the queue still
+  waits as told before the next one; `400`, `413` and
   other `4xx` drop and count; `415` resends once without gzip. The queue keeps
   `maxQueuedEnvelopes` (32) and `maxQueuedBytes` (48 MiB, above the largest
   envelope); the oldest envelope makes room, and the bound is soft (the newest and
@@ -140,8 +153,9 @@ where tracer's own tests ingest it.
 
 ## Public API
 
-- `TracerClient` (`state`, `enabled`, `traceId`, `stats`, `setTag`, `breadcrumb`,
-  `log`, `trace`, `report`, `feedback`, `flush`, `close`), `TracerOptions`,
+- `TracerClient` (`state`, `enabled`, `traceId`, `stats`, `setTag`, `setContext`,
+  `setRelease`, `breadcrumb`, `log`, `trace`, `report`, `feedback`, `flush`,
+  `close`), `TracerOptions`,
   `TracerState`, `TracerStats`, `TracerLevel`.
 - `Tracer` (`init`, `initWith`, `current`): one process-wide client.
 - `TracerAttachment` (`screenshot`, `viewHierarchy`), `TracerDsn` (`parse`,
