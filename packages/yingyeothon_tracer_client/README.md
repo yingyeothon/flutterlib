@@ -103,8 +103,9 @@ libraries_; tracer's `tracer/internal/` is the reference implementation.
   `503`s (busy, console, an address over its failure budget) answer before
   reading the body; the one for a body that arrives too slowly comes 10 s or
   more into the request, and on a slow link the client's own deadline may pass
-  first. The third such slow refusal for one envelope — a `503` or the deadline,
-  10 s or more in, with no other status between (a quick `503` or another
+  first. `dart:io` receives that mid-body `503` as a status with its
+  `Retry-After`, not as a socket error (checked against a deployed tracer). The
+  third such slow refusal for one envelope — a `503` or the deadline, 10 s or more in, with no other status between (a quick `503` or another
   network error neither counts nor restarts the count) — drops it as
   `send_failed`, so an oversized report on a bad link cannot hold the queue
   (a disk or store failure after a long upload counts too), and the queue still

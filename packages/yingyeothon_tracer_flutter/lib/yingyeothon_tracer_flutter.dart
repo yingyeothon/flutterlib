@@ -23,6 +23,7 @@ export 'package:yingyeothon_tracer_client/yingyeothon_tracer_client.dart'
 export 'src/tracer_flutter.dart'
     show
         TracerDefines,
+        TracerErrorScrubber,
         TracerFlutter,
         TracerNavigatorObserver,
         TracerReportButton,

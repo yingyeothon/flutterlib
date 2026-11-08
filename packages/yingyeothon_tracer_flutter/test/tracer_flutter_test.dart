@@ -208,6 +208,134 @@ void main() {
     FlutterError.onError = flutterBefore;
   });
 
+  testWidgets('scrubError rewrites the text; null or a throw keeps the type', (
+    tester,
+  ) async {
+    final fake = FakeHttp();
+    final flutterBefore = FlutterError.onError;
+    FlutterError.onError = (_) {};
+    final platformBefore = ui.PlatformDispatcher.instance.onError;
+    ui.PlatformDispatcher.instance.onError = (e, s) => true;
+    addTearDown(() async {
+      await TracerFlutter.dispose();
+      FlutterError.onError = flutterBefore;
+      ui.PlatformDispatcher.instance.onError = platformBefore;
+    });
+    final seen = <String>[];
+    final tracer = TracerFlutter.initUi(
+      dsn: fixtureDsn,
+      client: fake,
+      lifecycle: false,
+      scrubError: (error, text) {
+        seen.add('${error.runtimeType}|$text');
+        if (text.contains('drop')) return null;
+        if (text.contains('empty')) return '';
+        if (text.contains('reenter')) {
+          FlutterError.reportError(
+            FlutterErrorDetails(exception: StateError('inner reenter')),
+          );
+        }
+        if (text.contains('throw')) throw StateError('scrubber failed');
+        return text.replaceAll(RegExp(r'\d'), '#');
+      },
+    );
+    FlutterError.onError!(
+      FlutterErrorDetails(exception: StateError('card 1234')),
+    );
+    ui.PlatformDispatcher.instance.onError!(
+      ArgumentError('drop me'),
+      StackTrace.empty,
+    );
+    FlutterError.onError!(FlutterErrorDetails(exception: StateError('throw')));
+    FlutterError.onError!(FlutterErrorDetails(exception: StateError('empty')));
+    FlutterError.onError!(
+      FlutterErrorDetails(exception: StateError('reenter 5')),
+    );
+    await tracer.report('r0');
+    await tester.pump();
+    final first = fake.json(fake.bodies.length - 1, 0);
+    expect(crumbs(first), [
+      'flutter.error:Bad state: card ####',
+      'platform.error:ArgumentError',
+      'flutter.error:StateError',
+      'flutter.error:StateError',
+      'flutter.error:StateError',
+      'flutter.error:Bad state: reenter #',
+    ]);
+    expect(jsonEncode(first), isNot(contains('drop me')));
+    expect(jsonEncode(first), isNot(contains('inner reenter')));
+    expect(jsonEncode(first), isNot(contains('scrubber failed')));
+    // A later init keeps the first call's scrubber (the hooks are not
+    // reinstalled), and a scrubber passed then is ignored.
+    final second = TracerFlutter.initUi(
+      dsn: fixtureDsn,
+      client: fake,
+      scrubError: (error, text) => 'second',
+    );
+    FlutterError.onError!(
+      FlutterErrorDetails(exception: StateError('after 9')),
+    );
+    expect(seen, [
+      'StateError|Bad state: card 1234',
+      'ArgumentError|Invalid argument(s): drop me',
+      'StateError|Bad state: throw',
+      'StateError|Bad state: empty',
+      'StateError|Bad state: reenter 5',
+      'StateError|Bad state: after 9',
+    ]);
+    await second.report('r');
+    await tester.pump();
+    expect(tracer.state, TracerState.closed);
+    expect(crumbs(fake.json(fake.bodies.length - 1, 0)), [
+      'flutter.error:Bad state: after #',
+    ]);
+    await TracerFlutter.dispose();
+
+    // After dispose a new init installs fresh hooks with no scrubber.
+    final third = TracerFlutter.initUi(
+      dsn: fixtureDsn,
+      client: fake,
+      lifecycle: false,
+    );
+    FlutterError.onError!(FlutterErrorDetails(exception: StateError('raw 7')));
+    await third.report('r3');
+    await tester.pump();
+    expect(crumbs(fake.json(fake.bodies.length - 1, 0)), [
+      'flutter.error:Bad state: raw 7',
+    ]);
+    await TracerFlutter.dispose();
+    FlutterError.onError = flutterBefore;
+    ui.PlatformDispatcher.instance.onError = platformBefore;
+  });
+
+  testWidgets('a scrubbed-away text leaves the type in the breadcrumb', (
+    tester,
+  ) async {
+    final fake = FakeHttp();
+    final flutterBefore = FlutterError.onError;
+    FlutterError.onError = (_) {};
+    final tracer = TracerFlutter.initUi(
+      dsn: fixtureDsn,
+      client: fake,
+      lifecycle: false,
+      scrubError: (error, text) => null,
+    );
+    addTearDown(() async {
+      await TracerFlutter.dispose();
+      FlutterError.onError = flutterBefore;
+    });
+    FlutterError.onError!(
+      FlutterErrorDetails(exception: StateError('secret input')),
+    );
+    await tracer.report('r');
+    await tester.pump();
+    final event = fake.json(fake.bodies.length - 1, 0);
+    expect(crumbs(event), ['flutter.error:StateError']);
+    expect(jsonEncode(event), isNot(contains('secret input')));
+    await TracerFlutter.dispose();
+    FlutterError.onError = flutterBefore;
+  });
+
   testWidgets('initBackground: a plain client tagged with its isolate', (
     tester,
   ) async {

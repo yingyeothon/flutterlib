@@ -23,6 +23,16 @@ abstract final class TracerDefines {
   static const String gitSha = String.fromEnvironment('GIT_SHA');
 }
 
+/// Rewrites the text of an error that [TracerFlutter.initUi]'s hooks keep in
+/// a breadcrumb: [text] is what the hook would keep (`toString()` — the type
+/// when that throws — or Flutter's `exceptionAsString()`). Return the text to
+/// keep, or null or an empty string to keep only the error's type. An error
+/// raised while it runs is recorded with its type only. It runs inside the error handler: keep it
+/// synchronous and never report an error from it. Only those hooks use it —
+/// `report(error: …)`, `TracerLogWriter` and the app's own breadcrumbs and
+/// logs are not scrubbed.
+typedef TracerErrorScrubber = String? Function(Object error, String text);
+
 /// One-call setup per isolate. The UI isolate gets error, lifecycle and
 /// screenshot support; a background isolate gets a plain client. Both make
 /// the client [Tracer.current].
@@ -33,6 +43,7 @@ abstract final class TracerFlutter {
   static ui.ErrorCallback? _ownPlatformError;
   static AppLifecycleListener? _lifecycle;
   static bool _installed = false;
+  static bool _scrubbing = false;
   static Future<_DeviceInfo>? _deviceRead;
   static Future<String?>? _releaseRead;
   static Future<void> _platformReady = Future<void>.value();
@@ -51,6 +62,8 @@ abstract final class TracerFlutter {
   /// `PlatformDispatcher.onError` gain a breadcrumb (with the error text)
   /// and a log line (its type only), then call the handlers they replaced;
   /// this is **not** crash reporting (keep the app's own crash reporter).
+  /// [scrubError] rewrites that text first (null from it, or a throw, keeps
+  /// the type alone); without it the text is kept as is.
   /// Unless [lifecycle] is false, app lifecycle changes are breadcrumbs and
   /// `hidden`, `paused` and `detached` flush. `http` to a loopback host is
   /// allowed in debug builds only. In a release build the client is off
@@ -72,7 +85,8 @@ abstract final class TracerFlutter {
   /// arrives: pass yours here instead, or turn [readPlatform] off.
   ///
   /// Calling it again replaces the client; the hooks are installed by the
-  /// first call that turns tracer on and keep that call's choices.
+  /// first call that turns tracer on and keep that call's choices
+  /// ([captureErrors], [lifecycle], [scrubError]).
   static TracerClient initUi({
     String dsn = TracerDefines.dsn,
     String? release,
@@ -83,6 +97,7 @@ abstract final class TracerFlutter {
     String? userId,
     Map<String, Object?> contexts = const {},
     bool captureErrors = true,
+    TracerErrorScrubber? scrubError,
     bool lifecycle = true,
     bool readPlatform = true,
     bool enableInRelease = false,
@@ -115,7 +130,7 @@ abstract final class TracerFlutter {
     }
     if (tracer.enabled && !_installed) {
       _installed = true;
-      if (captureErrors) _installErrorHooks();
+      if (captureErrors) _installErrorHooks(scrubError);
       if (lifecycle) {
         _lifecycle = AppLifecycleListener(onStateChange: _lifecycleChanged);
       }
@@ -332,24 +347,52 @@ abstract final class TracerFlutter {
     return out.values.any((v) => v is String) ? out : null;
   }
 
-  /// A breadcrumb with the error's text (it stays on the device until a
-  /// report) and a log line with its type only.
-  static void _error(String category, Object error, String text) {
+  /// A breadcrumb with the error's text after [scrub] (it stays on the
+  /// device until a report) and a log line with its type only.
+  static void _error(
+    String category,
+    Object error,
+    String text,
+    TracerErrorScrubber? scrub,
+  ) {
     final tracer = Tracer.current;
+    if (!tracer.enabled) return;
     final type = error.runtimeType.toString();
+    String? kept = text;
+    if (scrub != null) {
+      if (_scrubbing) {
+        kept = null; // an error raised by the scrubber itself: no recursion
+      } else {
+        _scrubbing = true;
+        try {
+          kept = scrub(error, text);
+        } on Object {
+          kept = null; // a failing scrubber must not leak the text it guards
+        } finally {
+          _scrubbing = false;
+        }
+      }
+    }
     tracer.breadcrumb(
       category,
-      text,
+      kept == null || kept.isEmpty ? type : kept,
       data: {'type': type},
       level: TracerLevel.error,
     );
     tracer.log(TracerLevel.error, category, attributes: {'type': type});
   }
 
-  static void _installErrorHooks() {
+  /// Each hook keeps [scrub] itself, so a hook left in another handler's
+  /// chain after [dispose] still scrubs.
+  static void _installErrorHooks(TracerErrorScrubber? scrub) {
     _previousFlutterError = FlutterError.onError;
     FlutterError.onError = _ownFlutterError = (details) {
-      _error('flutter.error', details.exception, details.exceptionAsString());
+      _error(
+        'flutter.error',
+        details.exception,
+        details.exceptionAsString(),
+        scrub,
+      );
       final previous = _previousFlutterError;
       if (previous != null) {
         previous(details);
@@ -366,7 +409,7 @@ abstract final class TracerFlutter {
       } on Object {
         text = error.runtimeType.toString();
       }
-      _error('platform.error', error, text);
+      _error('platform.error', error, text, scrub);
       return _previousPlatformError?.call(error, stack) ?? false;
     };
   }

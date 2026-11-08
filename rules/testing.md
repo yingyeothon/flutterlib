@@ -57,6 +57,15 @@
   does. WebSocket tests are not affected. If such a test then fails with a pending
   timer, that is the pooled connection's 15 s idle timer: end the test with
   `tester.pump(const Duration(seconds: 16))`.
+- A widget test that replaces `FlutterError.onError` or
+  `PlatformDispatcher.instance.onError` saves the old value and puts it back in one
+  `addTearDown` callback registered before the first `expect`: `flutter_test`
+  resets only `FlutterError.onError` after a test, so a dispatcher handler left by
+  a failed test reaches the next one. A replacement that does not forward to the
+  saved handler hides a failed `expect` behind "A test overrode
+  FlutterError.onError…" — `addTearDown` does not prevent that — so forward unless
+  the test asserts the swallow. Older tests that restore at the end of the body
+  are migrated when touched.
 - Inside a `testWidgets` body, real I/O — starting or shutting down a
   `FakeGateway`, a raw `WebSocket` — is awaited inside `tester.runAsync`; awaited
   on the test clock it never completes and the run just hangs, naming no test.
@@ -114,8 +123,11 @@
   the method channel's map (dev-dependency `device_info_plus_platform_interface`;
   bump it with `device_info_plus`), and `PackageInfo.setMockInitialValues`.
   Both stay set for the rest of the file, and tracer_flutter caches its reads
-  per isolate: end every test that called `initUi` with `await
-  TracerFlutter.dispose()`. Await `TracerFlutter.platformReady` (or one
+  per isolate: every test that called `initUi` awaits `TracerFlutter.dispose()`
+  first in its `addTearDown` callback, then restores the handlers it saved —
+  `dispose` puts a handler back only while tracer's own is still on top, and
+  without it the next `initUi` sees the hooks installed and skips them. A
+  mid-test `dispose` the test asserts stays in the body. Await `TracerFlutter.platformReady` (or one
   `tester.pump()` with these synchronous fakes) before asserting device, OS or
   release, and pin the event written before it without them. Fill every
   identifying field of a fake with a `secret` marker (any case) and assert the

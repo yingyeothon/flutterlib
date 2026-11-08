@@ -96,10 +96,19 @@ committed.
   only, then the previous handler runs (or `FlutterError.presentError` when there
   was none) — and turns lifecycle changes into breadcrumbs, flushing on `hidden`,
   `paused` and `detached`. Errors your own `runZonedGuarded` catches never reach
-  these hooks.
+  these hooks. Since v0.3.3, pass `scrubError: (error, text) => …` to rewrite that
+  text before it is kept (mask what your errors may carry, such as user input);
+  returning null or an empty string — or throwing — keeps only the error's type, and
+  `(error, text) => null` is the safe default when you cannot tell. Without it the
+  text is kept as is, and a report carries it to everyone who can read the
+  resource. It covers the breadcrumb of these two hooks only: the console dump of
+  the previous handler (`FlutterError.presentError` writes the text through
+  `debugPrint`, so an app that mirrors `debugPrint` into tracer sends it unmasked),
+  `report(error: …)`, `TracerLogWriter`, your own breadcrumbs and logs, and the
+  screenshot are not scrubbed. Keep it synchronous.
   **This is not crash reporting**: keep your crash reporter; the two do not know
   about each other. Calling it again swaps the client and keeps one set of hooks
-  (with the first enabled call's `captureErrors` and `lifecycle`).
+  (with the first enabled call's `captureErrors`, `scrubError` and `lifecycle`).
 - `TracerFlutter.initBackground` builds a plain client for a background isolate,
   tagged `isolate: bg` (or yours). Each isolate has its own client and ring;
   `close()` it before the isolate ends, or its buffered lines are lost. It reads
@@ -148,7 +157,7 @@ lifecycle hook (`lifecycle: false`) if you mirror.
 
 - `TracerFlutter` (`initUi`, `initBackground`, `dispose`, `platformReady`),
   `TracerDefines` (`dsn`,
-  `gitSha`).
+  `gitSha`), `TracerErrorScrubber` (the type of `initUi`'s `scrubError`).
 - `TracerScreenshot` (`capture`, `viewHierarchy`), `TracerNavigatorObserver`,
   `TracerReportButton` (`reportThis`).
 - Re-exported from `yingyeothon_tracer_client` (documented there): `Tracer`,
