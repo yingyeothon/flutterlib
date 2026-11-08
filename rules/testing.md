@@ -112,8 +112,8 @@
   writes fails `golden_test.dart`; regenerate with `UPDATE_GOLDEN=1 dart test
   test/golden_test.dart`, check the diff, and when the wire changed, copy it there
   (a user-directed change in that repo, `workflow.md`): its Go tests count rows per
-  fixture (`internal/ingest` `TestGoldenEnvelopes`, `cmd/tracer` `dev_test.go`) and
-  compare read-API goldens (`go test ./internal/query -update`). The version is in
+  fixture (`internal/ingest` `TestGoldenEnvelopes`, `cmd/tracer` `dev_test.go`); its
+  read-API goldens seed only the captured `sentry-*` envelopes, so they do not move. The version is in
   the bytes, so a release bump regenerates it too (`release.md`).
 - In a widget test, an `async` call started inside `tester.runAsync` (a screenshot's
   `toImage` needs real time) keeps running in the real zone: after a fake-time pump
