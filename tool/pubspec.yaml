@@ -1,6 +1,6 @@
 name: yyt_tool
 description: Repository gates (docs, coverage). Not a library; never published.
-version: 0.3.0
+version: 0.3.1
 publish_to: none
 resolution: workspace
 environment:

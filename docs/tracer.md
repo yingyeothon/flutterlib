@@ -57,7 +57,6 @@ report can check out the exact code.
 ## Start it
 
 ```dart
-import 'package:yingyeothon_tracer_client/yingyeothon_tracer_client.dart';
 import 'package:yingyeothon_tracer_flutter/yingyeothon_tracer_flutter.dart';
 
 void main() {
@@ -71,8 +70,9 @@ void main() {
 In a background isolate (a BLE worker, a downloader) call
 `TracerFlutter.initBackground(isolate: 'ble')` first thing; each isolate has its own
 client and ring, and the defines reach every isolate. A program without Flutter uses
-`Tracer.init(dsn, release: …)` from the core package instead. Depend on both
-packages, on the same `ref:`: the Flutter one does not re-export the core.
+`Tracer.init(dsn, release: …)` from the core package instead. A Flutter app depends
+on `yingyeothon_tracer_flutter` only (it re-exports the core); listing both on one
+`ref:` fails version solving.
 **A release build stays off** even if a DSN was compiled in, unless you pass
 `enableInRelease: true`. Web is not supported: a browser sends tracer's auth
 header only after a CORS preflight the ingest does not answer.

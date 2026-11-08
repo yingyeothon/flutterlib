@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:yingyeothon_tracer_client/yingyeothon_tracer_client.dart';
 import 'package:yingyeothon_tracer_flutter/yingyeothon_tracer_flutter.dart';
 
 import '../session.dart';

@@ -29,18 +29,12 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_tracer_flutter
-      ref: v0.3.0
-  yingyeothon_tracer_client:
-    git:
-      url: https://github.com/yingyeothon/flutterlib.git
-      path: packages/yingyeothon_tracer_client
-      ref: v0.3.0
+      ref: v0.3.1
 ```
 
-Depend on both, on the same `ref:`: this package does not re-export the core
-(`Tracer`, `TracerLevel`, …). The packages are on main, pending an owner-cut
-release; the snippet names the existing release and does not claim that tag
-contains them — until it does, point `ref:` at a commit of `main`.
+Depend on this package only: it re-exports the core (`Tracer`, `TracerLevel`, …).
+Listing `yingyeothon_tracer_client` beside it on the same `ref:` fails version
+solving (v0.3.0 documented that; use v0.3.1 or later).
 
 ## Usage
 
@@ -108,8 +102,8 @@ committed.
 ## Beside a Sentry crash setup
 
 Keep the app's Sentry init for crashes; initialise tracer next to it. To copy
-Sentry's automatic breadcrumbs into tracer, mirror them in one line (`Tracer` is
-in `yingyeothon_tracer_client`, which this package does not re-export):
+Sentry's automatic breadcrumbs into tracer, mirror them in one line (`Tracer` comes
+with this package's re-export of `yingyeothon_tracer_client`):
 
 ```dart
 options.beforeBreadcrumb = (crumb, hint) {
@@ -132,6 +126,10 @@ lifecycle hook (`lifecycle: false`) if you mirror.
   `gitSha`).
 - `TracerScreenshot` (`capture`, `viewHierarchy`), `TracerNavigatorObserver`,
   `TracerReportButton` (`reportThis`).
+- Re-exported from `yingyeothon_tracer_client` (documented there): `Tracer`,
+  `TracerClient`, `TracerOptions`, `TracerDsn`, `TracerAttachment`, `TracerLevel`,
+  `TracerLimits`, `TracerLogWriter`, `TracerState`, `TracerStats`,
+  `tracerSdkVersion`.
 
 ## Differences from @yingyeothon/tracer-client and Yingyeothon.TracerClient
 

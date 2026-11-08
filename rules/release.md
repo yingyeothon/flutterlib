@@ -48,6 +48,12 @@
 
 ## Verifying a tag
 
+- Before tagging, install the package the way the README says — as one consumer
+  would — from a local `path:` and from the pushed commit: v0.3.0 shipped a two-package
+  tracer snippet that never resolved (a sibling `path:` dependency is read as the
+  tag's commit, a different source from `ref: v0.3.0`), and only the post-tag check
+  found it; v0.3.1 re-exports instead. A multi-package install names one package.
+
 - In a fresh `flutter create` app under `/tmp`, add the git dependency with the new
   `ref:` and run `flutter pub get` and a `main.dart` that constructs a client. That is
   the consumer's path and the only proof the tag installs.

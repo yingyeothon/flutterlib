@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:yingyeothon_tracer_client/yingyeothon_tracer_client.dart';
 import 'package:yingyeothon_tracer_flutter/yingyeothon_tracer_flutter.dart';
 
 /// The service fixture DSN (`tracer/testdata/envelopes/README.md`); not a

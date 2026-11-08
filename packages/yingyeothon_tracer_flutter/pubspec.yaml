@@ -1,6 +1,6 @@
 name: yingyeothon_tracer_flutter
 description: Flutter glue for yyt tracer - screenshots, view hierarchy, lifecycle, navigation and error breadcrumbs, and a debug-only report button over yingyeothon_tracer_client.
-version: 0.3.0
+version: 0.3.1
 # Installed by git dependency; nothing is on pub.dev (rules/release.md).
 # The one Flutter package: outside the pub workspace, like the example, so
 # the root gate needs only the Dart SDK (rules/tooling.md).

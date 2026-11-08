@@ -30,7 +30,7 @@ dependencies:
     git:
       url: https://github.com/yingyeothon/flutterlib.git
       path: packages/yingyeothon_social_client
-      ref: v0.3.0
+      ref: v0.3.1
 ```
 
 ## Usage
